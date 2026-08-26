@@ -1227,7 +1227,7 @@ function renderDetail(id){
   if(s.dorm) metaTags.push(esc(s.dorm)+(s.dormRoom?' '+esc(s.dormRoom):''));
   const metaHtml=metaTags.length?'<div class="st-meta-chips">'+metaTags.map(t=>'<span class="chip">'+t+'</span>').join('')+'</div>':'';
   const infoItem=(lab,val)=>'<div class="info-item"><div class="info-lab">'+lab+'</div><div class="info-val">'+val+'</div></div>';
-  const leftItems=[infoItem('姓名', esc(s.name))];
+  const leftItems=[];
   if(s.idCard) leftItems.push(infoItem('身份证', '<span class="copyable" data-copy="'+esc(s.idCard)+'">'+esc(s.idCard)+'</span>'));
   if(s.address) leftItems.push(infoItem('常住地址', esc(s.address)));
   if(s.hukou) leftItems.push(infoItem('户籍地', esc(s.hukou)));
