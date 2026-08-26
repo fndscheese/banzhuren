@@ -2288,7 +2288,7 @@ function feedbackHtml(r){
 let todoShowDone=false;
 let todoDonePage=1;
 function todoSection(){
-  return '<div class="card" style="padding:10px 14px"><details open><summary class="fold-title"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="4" width="14" height="14" rx="3" fill="#E4D58C" stroke="#C9B86A" stroke-width="1.5"/><path d="M8 9 H16 M8 12 H16 M8 15 H13" stroke="#8A7B3A" stroke-width="1.5" stroke-linecap="round"/><circle cx="15.5" cy="6.5" r="1.8" fill="#935855"/></svg> 待办事项 <span style="font-size:11px;color:#7A7E6E;font-weight:normal">（勾选=完成划线，不自动删）</span></summary>'
+  return '<div class="card" style="padding:10px 14px"><details open><summary class="fold-title"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="4" width="14" height="14" rx="3" fill="#E4D58C" stroke="#C9B86A" stroke-width="1.5"/><path d="M8 9 H16 M8 12 H16 M8 15 H13" stroke="#8A7B3A" stroke-width="1.5" stroke-linecap="round"/><circle cx="15.5" cy="6.5" r="1.8" fill="#935855"/></svg> 待办事项</summary>'
     +'<div style="display:flex;gap:6px;margin:8px 0"><input id="todoInput" placeholder="添加待办，如：周五前交安全教育平台" style="flex:1;padding:9px 12px;border:1px solid #E2E8D8;border-radius:10px;font-size:13px;outline:none;font-family:inherit" onkeydown="if(event.key===\'Enter\')addTodo()"><button class="btn small" onclick="addTodo()">添加</button></div>'
     +todoListHtml()+'</details></div>';
 }
