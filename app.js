@@ -448,7 +448,14 @@ function analyzeQuickNote(text){
   if(leaveHit){
     let subtype="事假";
     if(/病|发烧|发热|感冒|看病|就医|医务室|不舒服|生病|难受|头晕|肚子疼|咳嗽/.test(text)) subtype="病假";
-    let days=1; const dm=text.match(/(\d+(?:\.\d+)?)\s*天/); if(dm) days=Math.max(1,Math.round(parseFloat(dm[1])));
+    let days=1;
+    const dm=text.match(/(\d+(?:\.\d+)?)\s*天/);
+    if(dm){ days=Math.max(1,Math.round(parseFloat(dm[1]))); }
+    else {
+      const cnMap={半:0.5,一:1,壹:1,二:2,两:2,贰:2,三:3,叁:3,四:4,肆:4,五:5,伍:5,六:6,陆:6,七:7,柒:7,八:8,捌:8,九:9,玖:9,十:10,拾:10};
+      const cm=text.match(/(半|[零〇一二两三四五六七八九十壹贰叁肆伍陆柒捌玖拾]+)\s*天/);
+      if(cm&&cnMap[cm[1]]!==undefined) days=Math.max(0.5, cnMap[cm[1]]);
+    }
     let date=todayStr();
     if(/明[日天]/.test(text)){ const d=new Date(); d.setDate(d.getDate()+1); date=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
     else { const m=text.match(/(20\d{2}[-\/]\d{1,2}[-\/]\d{1,2})|(\d{1,2}[-\/]\d{1,2})/); if(m){ let ds=m[0].replace(/\//g,"-"); if(ds.indexOf("-")===ds.lastIndexOf("-")){ const p=ds.split("-"); ds=new Date().getFullYear()+"-"+String(p[0]).padStart(2,"0")+"-"+String(p[1]).padStart(2,"0"); } date=ds; } }
@@ -565,7 +572,7 @@ function confirmQuickNote(){
   if(type==="leave"){
     /* 请假登记：写入学生档案出勤，并自动在待办加一条“该生 请假”提醒 */
     const sub=document.getElementById("qnLSub").value;
-    const days=parseInt(document.getElementById("qnLDays").value)||1;
+    const days=parseFloat(document.getElementById("qnLDays").value)||1;
     const why=(document.getElementById("qnLWhy").value||"").trim();
     const leaveDate=document.getElementById("qnDate").value||todayStr();
     qnDoersState.forEach(sid=>{
@@ -739,7 +746,8 @@ function editStudentForm(stuId){
     +'<div class="form-row"><label>宿舍号（内宿生填，如 301）</label><input id="sDormRoom" value="'+esc(s?s.dormRoom||"":"")+'" placeholder="如：301"></div>'
     +'<div class="form-row"><label>身份证号（选填）</label><input id="sIdCard" value="'+esc(s?s.idCard||"":"")+'" placeholder="18位身份证号"></div>'
     +'<div class="form-row"><label>联系人（关系+姓名+电话，可加多条）</label><div id="contactBox">'+contactRows+'</div><button class="link-btn" onclick="addContactRow()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M12 8 V16 M8 12 H16" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/></svg> 添加联系人</button></div>'
-    +'<div class="form-row"><label>家庭住址（选填）</label><input id="sAddr" value="'+esc(s?s.address||"":"")+'" placeholder="乡镇村组/街道门牌"></div>'
+    +'<div class="form-row"><label>常住地址（选填）</label><input id="sAddr" value="'+esc(s?s.address||"":"")+'" placeholder="乡镇村组/街道门牌"></div>'
+    +'<div class="form-row"><label>户籍地（选填）</label><input id="sHukou" value="'+esc(s?s.hukou||"":"")+'" placeholder="如：xx县xx镇xx村"></div>'
     +'<div class="form-row"><label>特点标签（可多选，帮助生成方案）</label><div id="tagBox">'+tagHtml+'</div></div>'
     +'<div class="form-row"><label>注意事项/备注（家庭情况、特殊情况等）</label><textarea id="sNote" placeholder="例如：父母在东莞打工，跟奶奶住；有哮喘病史">'+esc(s?s.note||"":"")+'</textarea></div>'
     +'<button class="btn" onclick="saveStudent()">保存</button>'
@@ -779,6 +787,7 @@ function saveStudent(){
     idCard:document.getElementById("sIdCard").value.trim(),
     contacts:collectContacts(),
     address:document.getElementById("sAddr").value.trim(),
+    hukou:document.getElementById("sHukou").value.trim(),
     tags:tags, note:document.getElementById("sNote").value.trim()
   };
   if(window._editStuId){
@@ -1210,17 +1219,27 @@ function renderDetail(id){
   const cl=contactsCopyHtml(s);
   const violations=recs.filter(r=>r.type==="violation").length;
   const leaveCount=recs.filter(r=>r.type==="leave").length;
+  /* 个人信息双栏布局（有值才显示，无值跳过不留空位） */
+  const metaTags=[];
+  if(s.klass) metaTags.push(esc(s.klass));
+  if(s.gender) metaTags.push(esc(s.gender));
+  if(s.stuNo) metaTags.push('学号 '+esc(s.stuNo));
+  if(s.dorm) metaTags.push(esc(s.dorm)+(s.dormRoom?' '+esc(s.dormRoom):''));
+  const metaHtml=metaTags.length?'<div class="st-meta-chips">'+metaTags.map(t=>'<span class="chip">'+t+'</span>').join('')+'</div>':'';
+  const infoItem=(lab,val)=>'<div class="info-item"><div class="info-lab">'+lab+'</div><div class="info-val">'+val+'</div></div>';
+  const leftItems=[infoItem('姓名', esc(s.name))];
+  if(s.idCard) leftItems.push(infoItem('身份证', '<span class="copyable" data-copy="'+esc(s.idCard)+'">'+esc(s.idCard)+'</span>'));
+  if(s.address) leftItems.push(infoItem('常住地址', esc(s.address)));
+  if(s.hukou) leftItems.push(infoItem('户籍地', esc(s.hukou)));
+  const rightItems=[];
+  if(cl) rightItems.push(infoItem('联系人', cl));
+  if(s.note) rightItems.push(infoItem('备注', '<span class="note-txt">'+esc(s.note)+'</span>'));
+  const infoCols=(leftItems.length||rightItems.length)?'<div class="info-cols">'+(leftItems.length?'<div class="info-col">'+leftItems.join('')+'</div>':'')+(rightItems.length?'<div class="info-col">'+rightItems.join('')+'</div>':'')+'</div>':'';
   let html='<div class="detail-head">'
     +'<div class="avatar">'+esc(s.name.charAt(0))+'</div>'
     +'<div class="st-name">'+esc(s.name)+(s.klass?'　<span style="font-size:13px;color:#7A7E6E">'+esc(s.klass)+'</span>':"")+(s.gender?'　<span style="font-size:13px;color:#7A7E6E">'+esc(s.gender)+'</span>':"")+'</div>'
-    +'<div class="st-meta" style="font-size:12px;line-height:1.9">'
-    +(s.stuNo?'学号：'+esc(s.stuNo)+'<br>':"")
-    +(s.dorm?'住宿：'+esc(s.dorm)+(s.dormRoom?'　宿舍：'+esc(s.dormRoom):"")+'<br>':"")
-    +(s.idCard?'身份证：'+esc(s.idCard)+'<br>':"")
-    +(s.address?'住址：'+esc(s.address)+'<br>':"")
-    +(cl?'<span class="contact-line">'+cl+'</span><br>':"")
-    +(s.note?'<span style="color:#855F2C">'+esc(s.note)+'</span>':"")
-    +'</div>'
+    + metaHtml
+    + infoCols
     +'<div class="detail-tags">'+(s.tags||[]).map(t=>'<span class="tag">'+esc(t)+'</span>').join("")+'</div>'
     +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:center">'
     +'<button class="btn small ghost" onclick="editStudentForm(\''+id+'\')"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M8 16 L15 9 L17 11 L10 18 L7.5 18.5 Z" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/></svg> 编辑信息</button>'
@@ -1537,13 +1556,13 @@ function contactsCopyHtml(s){
       const rel=c.rel||c.name||"家长";
       const nm=(c.name&&c.rel&&c.rel!==c.name)?("("+c.name+")"):"";
       const phone=c.phone||"";
-      const phoneSpan=phone?'<span class="copyable" title="长按号码可复制" data-copy="'+esc(phone)+'">'+esc(phone)+'</span>':esc(phone);
+      const phoneSpan=phone?'<span class="copyable" data-copy="'+esc(phone)+'">'+esc(phone)+'</span>':esc(phone);
       return '<span class="c-item">'+esc(rel)+nm+'：'+phoneSpan+'</span>';
     }).join("　");
   }
   if(s.parentName||s.parentPhone){
     const phone=s.parentPhone||"";
-    const phoneSpan=phone?'<span class="copyable" title="长按号码可复制" data-copy="'+esc(phone)+'">'+esc(phone)+'</span>':"";
+    const phoneSpan=phone?'<span class="copyable" data-copy="'+esc(phone)+'">'+esc(phone)+'</span>':"";
     return '家长：'+esc(s.parentName||"")+(phone?'　电话：'+phoneSpan:"");
   }
   return "";
