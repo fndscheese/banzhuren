@@ -815,14 +815,14 @@ let importPreview=null;
 function importStudentsForm(){
   showModal('<div class="sheet-head"><h3>批量导入学生（Excel）</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
     +'<div class="form-row"><label>选择学生名单 Excel（.xlsx/.xls）</label><input type="file" id="isFile" class="file-input" accept=".xlsx,.xls"></div>'
-    +'<div class="form-row"><div class="upload-note">表格第一行是表头，需包含"姓名"列；其他可含：性别、班级、住宿（内宿/外宿）、身份证号、家庭住址、备注。<br>电话列有三种写法都支持：①一列"联系电话"写"爸爸：张三 123456789，妈妈：李四 987654321"；②多列"爸爸电话""妈妈电话"（列名含关系词自动识别）；③两者混合。<br>★ 导入时若某生的信息与平台已有记录<b>不同</b>（如住址、电话变更），会逐条列出旧值→新值，让你选"用新值"还是"保留旧值"，不会悄悄覆盖；新增的联系人（如妈妈）自动补充。<br>同名/相似名字会先让你确认"合并还是新建"，不产生重复档案。</div></div>'
+    +'<div class="form-row"><div class="upload-note">表格第一行是表头，需包含"姓名"列；其他可含：性别、班级、住宿（内宿/外宿）、身份证号、家庭住址、户籍地、备注。<br>电话列有三种写法都支持：①一列"联系电话"写"爸爸：张三 123456789，妈妈：李四 987654321"；②多列"爸爸电话""妈妈电话"（列名含关系词自动识别）；③两者混合。<br>★ 导入时若某生的信息与平台已有记录<b>不同</b>（如住址、电话变更），会逐条列出旧值→新值，让你选"用新值"还是"保留旧值"，不会悄悄覆盖；新增的联系人（如妈妈）自动补充。<br>同名/相似名字会先让你确认"合并还是新建"，不产生重复档案。</div></div>'
     +'<button class="btn" onclick="parseStudentsFile()">解析并预览</button>'
     +'<div id="isResult" style="margin-top:10px"></div>'
     +'<p style="font-size:11px;color:#9AA092;margin-top:8px">身份证等个人信息只存你自己的云存储，注意保密。文件在浏览器本地解析，不会上传给我。</p>');
 }
-const FIELD_LABEL={gender:"性别",klass:"班级",stuNo:"学号",dorm:"住宿",dormRoom:"宿舍号",idCard:"身份证号",address:"家庭住址",note:"注意事项"};
+const FIELD_LABEL={gender:"性别",klass:"班级",stuNo:"学号",dorm:"住宿",dormRoom:"宿舍号",idCard:"身份证号",address:"家庭住址",hukou:"户籍地",note:"注意事项"};
 /* 表头列名 → 联系人关系词 */
-const REL_ALIAS={"爸爸":"爸爸","父亲":"爸爸","老爸":"爸爸","爸":"爸爸","妈妈":"妈妈","母亲":"妈妈","老妈":"妈妈","妈":"妈妈","爷爷":"爷爷","奶奶":"奶奶","外公":"外公","外婆":"外婆","姥姥":"外婆","姥爷":"外公","姑姑":"姑姑","叔叔":"叔叔","舅舅":"舅舅","阿姨":"阿姨","哥哥":"哥哥","姐姐":"姐姐","弟弟":"弟弟","妹妹":"妹妹","家长":"家长","监护人":"家长"};
+const REL_ALIAS={"爸爸":"爸爸","父亲":"爸爸","老爸":"爸爸","爸":"爸爸","妈妈":"妈妈","母亲":"妈妈","老妈":"妈妈","妈":"妈妈","爷爷":"爷爷","奶奶":"奶奶","外公":"外公","外婆":"外婆","姥姥":"外婆","姥爷":"外公","姑姑":"姑姑","叔叔":"叔叔","舅舅":"舅舅","阿姨":"阿姨","哥哥":"哥哥","姐姐":"姐姐","弟弟":"弟弟","妹妹":"妹妹","家长":"家长","监护人":"家长","其他":"其他","其它":"其他"};
 function relOfHeader(h){ for(const k in REL_ALIAS){ if(h.includes(k)) return REL_ALIAS[k]; } return ""; }
 /* 单元格（可能含多个联系人）+ 列关系词 → 联系人数组 */
 function cellContacts(row, phoneCols, cell){
@@ -843,7 +843,7 @@ function cellContacts(row, phoneCols, cell){
 let changeSeq=0;
 function detectChanges(stu, data){
   const conflicts=[], adds=[];
-  ["gender","klass","stuNo","dorm","dormRoom","idCard","address","note"].forEach(k=>{
+  ["gender","klass","stuNo","dorm","dormRoom","idCard","address","hukou","note"].forEach(k=>{
     const nv=(data[k]||"").trim();
     if(!nv) return;
     const ov=(stu[k]||"").trim();
@@ -879,6 +879,8 @@ async function parseStudentsFile(){
       const phoneCols=[];
       head.forEach((h,i)=>{ if(/电话|手机|联系方式|号码/.test(h)) phoneCols.push({idx:i, rel:relOfHeader(h), header:h}); });
       const hasPhone=phoneCols.length>0;
+      const hukouIdx=findIdx(/户籍|户口|籍贯/);
+      const addrRe=/(住址|地址|家庭地址|常住)/;
       const cols={
         gender:findIdx(/性别/),
         klass:findIdx(/班级|班别/),
@@ -886,7 +888,8 @@ async function parseStudentsFile(){
         dorm:findIdx(/住宿|内宿|外宿|走读|临时走读/),
         dormRoom:findIdx(/宿舍/),
         idCard:findIdx(/身份证|证件号|证件号码/),
-        addr:findIdx(/住址|地址|家庭地址/),
+        hukou:hukouIdx,
+        addr:head.findIndex((h,i)=>addrRe.test(h)&&i!==hukouIdx),
         note:findIdx(/备注|注意|特殊|情况/)
       };
       if(cols.dormRoom===cols.dorm) cols.dormRoom=-1;
@@ -913,6 +916,7 @@ async function parseStudentsFile(){
           dorm:dorm, dormRoom:dormRoom,
           idCard:cell(cols.idCard),
           contacts:hasPhone?cellContacts(rows[r], phoneCols, cell):[],
+          hukou:cell(cols.hukou),
           address:cell(cols.addr), note:cell(cols.note)
         };
         const exist=DB.students.find(s=>s.name===rawName);
@@ -990,7 +994,7 @@ function confirmImport(){
   if(!p) return;
   let added=0, updated=0, applied=0;
   const applyData=(stu,data)=>{
-    ["gender","klass","stuNo","dorm","dormRoom","idCard","address","note"].forEach(k=>{
+    ["gender","klass","stuNo","dorm","dormRoom","idCard","address","hukou","note"].forEach(k=>{
       const nv=(data[k]||"").trim();
       if(!nv) return;
       const ch=p.changes.find(c=>c.stu===stu&&c.field===k);
@@ -1025,12 +1029,12 @@ function confirmImport(){
     if(d.merge&&d.target){ applyData(d.target,d.data); updated++; }
     else{
       const s=d.data;
-      DB.students.push({id:uid(), name:d.name, gender:s.gender, klass:s.klass, stuNo:s.stuNo, dorm:s.dorm, dormRoom:s.dormRoom, idCard:s.idCard, contacts:s.contacts, address:s.address, tags:[], note:s.note, createdAt:todayStr()});
+      DB.students.push({id:uid(), name:d.name, gender:s.gender, klass:s.klass, stuNo:s.stuNo, dorm:s.dorm, dormRoom:s.dormRoom, idCard:s.idCard, contacts:s.contacts, address:s.address, hukou:s.hukou, tags:[], note:s.note, createdAt:todayStr()});
       added++;
     }
   });
   p.news.forEach(n=>{
-    DB.students.push({id:uid(), name:n.name, gender:n.data.gender, klass:n.data.klass, stuNo:n.data.stuNo, dorm:n.data.dorm, dormRoom:n.data.dormRoom, idCard:n.data.idCard, contacts:n.data.contacts, address:n.data.address, tags:[], note:n.data.note, createdAt:todayStr()});
+    DB.students.push({id:uid(), name:n.name, gender:n.data.gender, klass:n.data.klass, stuNo:n.data.stuNo, dorm:n.data.dorm, dormRoom:n.data.dormRoom, idCard:n.data.idCard, contacts:n.data.contacts, address:n.data.address, hukou:n.data.hukou, tags:[], note:n.data.note, createdAt:todayStr()});
     added++;
   });
   /* 导入后：自动创建/补全宿舍（内宿+有宿舍号的学生） */
@@ -2403,6 +2407,7 @@ function buildStudentDocInner(s, recs, sel, imgHtml){
     h+=row("住宿情况", esc((s.dorm||"")+(s.dormRoom?" "+s.dormRoom+"宿舍":"")));
     h+=row("身份证号", esc(s.idCard||""));
     h+=row("家庭住址", esc(s.address||""));
+    h+=row("户籍地", esc(s.hukou||""));
     h+=row("联系方式", esc(contactsLine(s)||""));
     h+=row("注意事项", esc(s.note||""));
     h+='</table>';
