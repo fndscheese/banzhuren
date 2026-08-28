@@ -722,7 +722,6 @@ function renderStudents(){
         +'<div class="avatar">'+esc(s.name.charAt(0))+'</div>'
         +'<div class="st-info"><div class="st-name">'+esc(s.name)+' '+(s.gender?('<span style="font-size:12px;color:#7A7E6E">'+esc(s.gender)+'</span>'):"")+(s.stuNo?'<span class="stu-no">'+esc(s.stuNo)+'</span>':"")+'</div>'
         + (dormSub?'<div class="st-dorm">'+dormSub+'</div>':"")
-        +'<div class="st-meta">'+esc(meta)+'</div>'
         +'<div>'+astTag+(s.tags||[]).slice(0,3).map(t=>'<span class="tag">'+esc(t)+'</span>').join("")+'</div>'
         +'</div></div>';
     }).join("");
