@@ -709,20 +709,21 @@ function renderStudents(){
     +'<option value="attend"'+(studentSort==="attend"?" selected":"")+'>按考勤（请假/长期未到/正常）</option>'
     +'</select></div>';
   html+='<div class="section-title">全班学生（'+DB.students.length+'人）</div>';
-  if(!list.length){ html+='<div class="card"><div class="empty">'+(DB.students.length?'没有找到匹配的学生':'还没有学生，点"添加学生"或"批量导入(Excel)"建立花名册')+'</div></div>'; }
+  if(!list.length){ html+='<div class="card"><div class="empty">'+(DB.students.length?'没有找到匹配的学生':'还没有学生，点"添加学生"或"批量导入"建立花名册')+'</div></div>'; }
   else{
     html+=list.map(s=>{
       const recs=getRecords(s.id);
       const last=recs[0];
       const meta=last?(recTypeName(last.type)+" · "+last.date):"暂无记录";
-      const dormTag=s.dorm?('<span class="tag tag-dorm">'+esc(s.dorm)+'</span>'):"";
+      const dormSub=(s.dorm||s.dormRoom)?esc(s.dorm||"")+(s.dormRoom?esc(s.dormRoom):""):"";
       const ast=attendStatus(s);
       const astTag='<span class="tag '+(ast==="请假"?"tag-leave":ast==="长期未到校"?"tag-long":"tag-ok")+'">'+esc(ast)+'</span>';
       return '<div class="student-item" onclick="openStudent(\''+s.id+'\')">'
         +'<div class="avatar">'+esc(s.name.charAt(0))+'</div>'
         +'<div class="st-info"><div class="st-name">'+esc(s.name)+' '+(s.gender?('<span style="font-size:12px;color:#7A7E6E">'+esc(s.gender)+'</span>'):"")+(s.stuNo?'<span class="stu-no">'+esc(s.stuNo)+'</span>':"")+'</div>'
+        + (dormSub?'<div class="st-dorm">'+dormSub+'</div>':"")
         +'<div class="st-meta">'+esc(meta)+'</div>'
-        +'<div>'+dormTag+astTag+(s.tags||[]).slice(0,3).map(t=>'<span class="tag">'+esc(t)+'</span>').join("")+'</div>'
+        +'<div>'+astTag+(s.tags||[]).slice(0,3).map(t=>'<span class="tag">'+esc(t)+'</span>').join("")+'</div>'
         +'</div></div>';
     }).join("");
   }
@@ -814,12 +815,13 @@ function delStudent(stuId){
 }
 let importPreview=null;
 function importStudentsForm(){
-  showModal('<div class="sheet-head"><h3>批量导入学生（Excel）</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
-    +'<div class="form-row"><label>选择学生名单 Excel（.xlsx/.xls）</label><input type="file" id="isFile" class="file-input" accept=".xlsx,.xls"></div>'
-    +'<div class="form-row"><div class="upload-note">表格第一行是表头，需包含"姓名"列；其他可含：性别、班级、住宿（内宿/外宿）、身份证号、家庭住址、户籍地、备注。<br>电话列有三种写法都支持：①一列"联系电话"写"爸爸：张三 123456789，妈妈：李四 987654321"；②多列"爸爸电话""妈妈电话"（列名含关系词自动识别）；③两者混合。<br>★ 导入时若某生的信息与平台已有记录<b>不同</b>（如住址、电话变更），会逐条列出旧值→新值，让你选"用新值"还是"保留旧值"，不会悄悄覆盖；新增的联系人（如妈妈）自动补充。<br>同名/相似名字会先让你确认"合并还是新建"，不产生重复档案。</div></div>'
+  showModal('<div class="sheet-head"><h3>批量导入学生（Excel / Word）</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
+    +'<div class="form-row"><label>选择学生名单（Excel .xlsx / Word .docx）</label><input type="file" id="isFile" class="file-input" accept=".xlsx,.xls,.docx"></div>'
+    +'<div class="form-row"><label>本批宿舍号（选填，整张表同一宿舍时填，如 101；留空则按名单里的宿舍列或标题识别）</label><input id="isDormRoom" placeholder="如：101"></div>'
+    +'<div class="form-row"><div class="upload-note">Excel：第一行是表头，需含"姓名"列；其他可含性别、班级、住宿（内宿/外宿）、身份证号、家庭住址、户籍地、备注。Word：每行一个姓名即可。<br>★ 整宿舍导入时，平台会自动从标题识别宿舍号——例如表格/文档标题写"<b>（男生101）宿舍床位安排</b>"，这批学生宿舍号就都是 <b>101</b>（也可直接在上面框里手填，优先用手填的）。<br>电话列三种写法都支持：①一列"联系电话"写"爸爸：张三 123…"；②多列"爸爸电话""妈妈电话"；③混合。<br>★ 导入时信息<b>不同</b>会逐条列出旧值→新值让你选，不悄悄覆盖；同名/相似名字先确认"合并还是新建"。</div></div>'
     +'<button class="btn" onclick="parseStudentsFile()">解析并预览</button>'
     +'<div id="isResult" style="margin-top:10px"></div>'
-    +'<p style="font-size:11px;color:#9AA092;margin-top:8px">身份证等个人信息只存你自己的云存储，注意保密。文件在浏览器本地解析，不会上传给我。</p>');
+    +'<p style="font-size:11px;color:#9AA092;margin-top:8px">身份证等个人信息只存你自己的浏览器，注意保密。文件在浏览器本地解析，不会上传。</p>');
 }
 const FIELD_LABEL={gender:"性别",klass:"班级",stuNo:"学号",dorm:"住宿",dormRoom:"宿舍号",idCard:"身份证号",address:"家庭住址",hukou:"户籍地",note:"注意事项"};
 /* 表头列名 → 联系人关系词 */
@@ -863,7 +865,18 @@ function detectChanges(stu, data){
 }
 async function parseStudentsFile(){
   const file=document.getElementById("isFile").files[0];
-  if(!file){ toast("请先选择 Excel 文件"); return; }
+  if(!file){ toast("请先选择名单文件"); return; }
+  const isDocx=/\.docx$/i.test(file.name||"");
+  if(isDocx){
+    try{
+      const text=await extractDocxText(file);
+      const names=extractNamesFromText(text);
+      if(!names.length){ toast("未能从 Word 中识别到姓名，请确认文档里每行一个姓名"); return; }
+      const batchRoom=document.getElementById("isDormRoom").value.trim()||detectDormFromTitle(text+" "+(file.name||""));
+      importWordStudents(names, batchRoom);
+    }catch(e){ toast("Word 解析失败："+e.message+"，请改用 Excel 或粘贴姓名"); }
+    return;
+  }
   try{ await ensureXLSX(); }catch(e){ toast("Excel 组件加载失败，请刷新页面后重试"); return; }
   const reader=new FileReader();
   reader.onload=(e)=>{
@@ -895,6 +908,11 @@ async function parseStudentsFile(){
       };
       if(cols.dormRoom===cols.dorm) cols.dormRoom=-1;
       changeSeq=0;
+      /* 整批宿舍号：优先用弹窗里填的，其次从表名/表头标题识别，如"(男生101)宿舍床位安排" → 101 */
+      const userDorm=document.getElementById("isDormRoom").value.trim();
+      let titleText=(wb.SheetNames[0]||"");
+      for(let ri=0;ri<Math.min(6,rows.length);ri++){ rows[ri].forEach(c=>{ const t=String(c||"").trim(); if(t) titleText+=" "+t; }); }
+      const batchDormRoom=userDorm||detectDormFromTitle(titleText+" "+(file.name||""));
       const news=[], updates=[], dups=[], changes=[];
       for(let r=1;r<rows.length;r++){
         const rawName=String(rows[r][nameIdx]||"").trim().replace(/\s+/g,"");
@@ -920,6 +938,7 @@ async function parseStudentsFile(){
           hukou:cell(cols.hukou),
           address:cell(cols.addr), note:cell(cols.note)
         };
+        if(batchDormRoom){ data.dormRoom=batchDormRoom; if(!data.dorm) data.dorm="内宿"; }
         const exist=DB.students.find(s=>s.name===rawName);
         if(exist){
           const ch=detectChanges(exist, data);
@@ -3025,7 +3044,7 @@ function cmpFromPaste(){
   if(!names.length){ toast("没识别出姓名，请每行一个或用逗号/顿号分隔"); return; }
   runRosterCompare(names);
 }
-async function extractDocxNames(file){
+async function extractDocxText(file){
   const buf=await file.arrayBuffer();
   const u=new Uint8Array(buf);
   let eocd=-1;
@@ -3060,8 +3079,9 @@ async function extractDocxNames(file){
     if(ms){ ms.forEach(function(m){ text+=m.replace(/<w:t\b[^>]*>/i,"").replace(/<\/w:t>/i,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">"); }); }
     text+="\n";
   });
-  return extractNamesFromText(text);
+  return text;
 }
+async function extractDocxNames(file){ return extractNamesFromText(await extractDocxText(file)); }
 function runRosterCompare(names){
   const provided=new Set(names.map(normName));
   const missing=DB.students.filter(function(s){ return !provided.has(normName(s.name)); }).map(function(s){ return s.name; });
@@ -3075,4 +3095,34 @@ function runRosterCompare(names){
   }
   html+='</div>';
   const box=document.getElementById("cmpResult"); if(box) box.innerHTML=html;
+}
+
+/* ========== 批量导入：Word 名单 + 整批宿舍号识别 ========== */
+/* 从标题/表名识别宿舍号，如 "(男生101)宿舍床位安排" 或 "101宿舍" → "101" */
+function detectDormFromTitle(text){
+  if(!text) return "";
+  let m=text.match(/[（(]\s*(?:男生|女生|男|女)?\s*(\d{1,4})\s*[）)]/);
+  if(m) return m[1];
+  m=text.match(/(\d{1,4})\s*宿舍|宿舍\s*(\d{1,4})/);
+  if(m) return m[1]||m[2];
+  return "";
+}
+/* Word 名单：仅姓名 + 整批宿舍号，复用与 Excel 一致的预览/确认流程 */
+function importWordStudents(names, batchRoom){
+  const news=[], updates=[], dups=[], changes=[];
+  names.forEach(function(rawName){
+    const data={ gender:"", klass:"", stuNo:"", dorm: batchRoom?"内宿":"", dormRoom: batchRoom, idCard:"", contacts:[], hukou:"", address:"", note:"" };
+    const exist=DB.students.find(function(s){ return s.name===rawName; });
+    if(exist){
+      const ch=detectChanges(exist, data);
+      updates.push({name:rawName, data:data, target:exist, changes:ch.conflicts, adds:ch.adds});
+      changes.push.apply(changes, ch.conflicts);
+    }else{
+      const cands=DB.students.filter(function(s){ return nameSim(s.name,rawName)>=0.5; });
+      if(cands.length){ const target=cands[0]; const ch=detectChanges(target,data); dups.push({name:rawName,data:data,cands:cands,target:target,merge:true,changes:ch.conflicts,adds:ch.adds}); changes.push.apply(changes,ch.conflicts); }
+      else news.push({name:rawName, data:data});
+    }
+  });
+  importPreview={news:news, updates:updates, dups:dups, hasPhone:false, changes:changes};
+  renderImportPreview();
 }
