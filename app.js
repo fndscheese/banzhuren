@@ -695,10 +695,11 @@ function renderStudents(){
   const filtered=DB.students.filter(s=>!kw||s.name.includes(kw));
   const list=sortStudents(filtered, studentSort);
   let html='<div class="search-wrap"><input id="stuSearch" placeholder="搜学生名字…" value="'+esc(studentQuery)+'"></div>';
-  html+='<div style="display:flex;gap:8px">'
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
     +'<button class="btn" style="flex:1" onclick="addStudentForm()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M12 8 V16 M8 12 H16" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/></svg> 添加学生</button>'
     +'<button class="btn ghost" style="flex:1" onclick="importStudentsForm()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M8 6 H13 L16 9 V18 H8 Z" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/><path d="M13 6 V9 H16" fill="none" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/><path d="M10 11 H14 M10 14 H14" stroke="#8A9E68" stroke-width="1.3" stroke-linecap="round"/></svg> 批量导入</button>'
-    +'<button class="btn ghost" style="flex:1" onclick="exportStudentsForm()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M8 6 H13 L16 9 V18 H8 Z" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/><path d="M13 6 V9 H16" fill="none" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/><path d="M10 11 H14 M10 14 H14" stroke="#8A9E68" stroke-width="1.3" stroke-linecap="round"/></svg> 导出名单</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:120px" onclick="exportStudentsForm()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M8 6 H13 L16 9 V18 H8 Z" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/><path d="M13 6 V9 H16" fill="none" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/><path d="M10 11 H14 M10 14 H14" stroke="#8A9E68" stroke-width="1.3" stroke-linecap="round"/></svg> 导出名单</button>'
+    +'<button class="btn ghost" style="flex:1;min-width:120px" onclick="compareRosterForm()"><svg viewBox="0 0 24 24" class="ic"><circle cx="9" cy="12" r="6" fill="none" stroke="#5C7A4E" stroke-width="2"/><circle cx="15" cy="12" r="6" fill="none" stroke="#5C7A4E" stroke-width="2"/></svg> 名单比对</button>'
     +'</div>';
   html+='<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'
     +'<span style="font-size:12px;color:#7A7E6E">排序：</span>'
@@ -972,8 +973,9 @@ function renderImportPreview(){
     html+='<div class="pv-group pv-dup"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#EAACA9" stroke="#8E3B34" stroke-width="1.6"/><path d="M12 7 V13" stroke="#8E3B34" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="16" r="1.4" fill="#8E3B34"/></svg> 疑似重复 '+p.dups.length+' 人（名字相似，请确认）<br>';
     p.dups.forEach((d,i)=>{
       const candNames=d.cands.map(c=>c.name).join("、");
-      html+='<div class="dup-row"><span>「'+esc(d.name)+'」→ 已有「'+esc(candNames)+'」</span>'
-        +'<button class="btn small ghost" onclick="toggleDup('+i+')">'+(d.merge?"合并(推荐)":"改为新建")+'</button></div>';
+      html+='<div class="dup-row"><span>「'+esc(d.name)+'」→ 已有「'+esc(candNames)+'」</span><span class="dup-btns">'
+        +'<button class="btn small '+(d.merge?'':'ghost')+'" onclick="setDupMode('+i+',\'merge\')">合并(推荐)</button>'
+        +'<button class="btn small '+(d.merge?'ghost':'')+'" onclick="setDupMode('+i+',\'new\')">新建</button></span></div>';
     });
     html+='</div>';
   }
@@ -988,7 +990,7 @@ function toggleChange(id){
   if(ch){ ch.useNew=!ch.useNew; }
   renderImportPreview();
 }
-function toggleDup(i){ importPreview.dups[i].merge=!importPreview.dups[i].merge; renderImportPreview(); }
+function setDupMode(i, mode){ if(!importPreview||!importPreview.dups[i]) return; importPreview.dups[i].merge=(mode==='merge'); renderImportPreview(); }
 function confirmImport(){
   const p=importPreview;
   if(!p) return;
@@ -2952,3 +2954,125 @@ function doChangePass(){
 DB=load();
 loadCloudConf();
 showPassGate();
+
+/* ========== 名单比对 ========== */
+function normName(n){ return String(n||"").trim().replace(/\s+/g,""); }
+function extractNamesFromText(text){
+  const out=new Set();
+  if(!text) return [];
+  String(text).split(/[\r\n\t，,；;、]+/).forEach(function(raw){
+    let t=raw.trim();
+    if(!t) return;
+    t=t.replace(/^[\d]+[\.、)）\s]+/,"").replace(/^[（(]\d+[)）]/,"");
+    t=t.replace(/^[^一-龥A-Za-z]+|[^一-龥A-Za-z]+$/g,"").trim();
+    if(!t) return;
+    if(t.length>12) return;
+    if(/^(姓名|名字|学生|名单|序号|编号|班级)$/.test(t)) return;
+    if(t.indexOf(" ")>=0){
+      t.split(/\s+/).forEach(function(x){ const y=x.trim(); if(y&&y.length<=6&&/[一-龥]/.test(y)) out.add(y); });
+    } else { out.add(t); }
+  });
+  return Array.from(out);
+}
+function compareRosterForm(){
+  if(!DB.students.length){ toast("平台还没有学生名单，请先添加学生"); return; }
+  showModal(
+    '<div class="sheet-head"><h3>名单比对</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
+    +'<p style="font-size:13px;color:#5B6157;margin:4px 0 12px">把你的名单交给平台，自动和平台已存的 <b>'+DB.students.length+'</b> 名学生比对，找出<b>平台里有、但你这份名单里没出现的同学</b>。</p>'
+    +'<div class="form-row"><label>① 上传 Excel 名单（含"姓名"列）</label><input type="file" id="cmpXlsx" class="file-input" accept=".xlsx,.xls"></div>'
+    +'<button class="btn ghost" onclick="cmpFromExcel()">解析 Excel 并比对</button>'
+    +'<div class="form-row" style="margin-top:10px"><label>② 上传 Word 名单（.docx）</label><input type="file" id="cmpDocx" class="file-input" accept=".docx"></div>'
+    +'<button class="btn ghost" onclick="cmpFromWord()">解析 Word 并比对</button>'
+    +'<div class="form-row" style="margin-top:10px"><label>③ 直接粘贴姓名</label><textarea id="cmpPaste" placeholder="每行一个姓名，或用逗号、顿号分隔，例如：张三、李四、王五" style="min-height:90px"></textarea></div>'
+    +'<button class="btn ghost" onclick="cmpFromPaste()">用粘贴内容比对</button>'
+    +'<div id="cmpResult" style="margin-top:12px"></div>'
+  );
+}
+async function cmpFromExcel(){
+  const f=document.getElementById("cmpXlsx").files[0];
+  if(!f){ toast("请先选择 Excel 文件"); return; }
+  try{ await ensureXLSX(); }catch(e){ toast("Excel 组件加载失败，请刷新后重试"); return; }
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    if(!rows.length){ toast("表格是空的"); return; }
+    const head=rows[0].map(function(h){ return String(h||"").trim(); });
+    const nameIdx=head.findIndex(function(h){ return /姓名|名字|学生/.test(h); });
+    const names=[];
+    if(nameIdx>=0){
+      for(let r=1;r<rows.length;r++){ const v=String(rows[r][nameIdx]||"").trim().replace(/\s+/g,""); if(v) names.push(v); }
+    }else{
+      for(let r=1;r<rows.length;r++){ const v=String(rows[r][0]||"").trim().replace(/\s+/g,""); if(v) names.push(v); }
+    }
+    runRosterCompare(names);
+  }catch(err){ toast("解析失败："+err.message); }
+}
+async function cmpFromWord(){
+  const f=document.getElementById("cmpDocx").files[0];
+  if(!f){ toast("请先选择 Word 文件"); return; }
+  try{
+    const names=await extractDocxNames(f);
+    if(!names.length){ toast("未能从 Word 中提取到姓名，请改用粘贴或 Excel"); return; }
+    runRosterCompare(names);
+  }catch(err){ toast("Word 解析失败："+err.message+"，请直接复制粘贴姓名"); }
+}
+function cmpFromPaste(){
+  const t=document.getElementById("cmpPaste").value||"";
+  if(!t.trim()){ toast("请先粘贴姓名"); return; }
+  const names=extractNamesFromText(t);
+  if(!names.length){ toast("没识别出姓名，请每行一个或用逗号/顿号分隔"); return; }
+  runRosterCompare(names);
+}
+async function extractDocxNames(file){
+  const buf=await file.arrayBuffer();
+  const u=new Uint8Array(buf);
+  let eocd=-1;
+  for(let i=u.length-22;i>=0;i--){ if(u[i]===0x50&&u[i+1]===0x4b&&u[i+2]===0x05&&u[i+3]===0x06){ eocd=i; break; } }
+  if(eocd<0) throw new Error("文件不是有效的 docx");
+  const dv=new DataView(buf);
+  const cdOffset=dv.getUint32(eocd+16,true);
+  const cdCount=dv.getUint16(eocd+10,true);
+  let p=cdOffset, docComp=0, docLocal=-1;
+  for(let n=0;n<cdCount;n++){
+    if(u[p]!==0x50||u[p+1]!==0x4b||u[p+2]!==0x01||u[p+3]!==0x02) break;
+    const compSize=dv.getUint32(p+20,true);
+    const nameLen=dv.getUint16(p+28,true);
+    const extraLen=dv.getUint16(p+30,true);
+    const commentLen=dv.getUint16(p+32,true);
+    const name=new TextDecoder().decode(u.slice(p+46,p+46+nameLen));
+    if(name==="word/document.xml"){ docComp=compSize; docLocal=dv.getUint32(p+42,true); }
+    p+=46+nameLen+extraLen+commentLen;
+  }
+  if(docLocal<0) throw new Error("找不到文档内容");
+  const lNameLen=dv.getUint16(docLocal+26,true);
+  const lExtraLen=dv.getUint16(docLocal+28,true);
+  const dataStart=docLocal+30+lNameLen+lExtraLen;
+  const compData=u.slice(dataStart,dataStart+docComp);
+  const stream=new Blob([compData]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const ab=await new Response(stream).arrayBuffer();
+  const xml=new TextDecoder().decode(new Uint8Array(ab));
+  const paras=xml.split(/<\/w:p>/i);
+  let text="";
+  paras.forEach(function(pg){
+    const ms=pg.match(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/gi);
+    if(ms){ ms.forEach(function(m){ text+=m.replace(/<w:t\b[^>]*>/i,"").replace(/<\/w:t>/i,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">"); }); }
+    text+="\n";
+  });
+  return extractNamesFromText(text);
+}
+function runRosterCompare(names){
+  const provided=new Set(names.map(normName));
+  const missing=DB.students.filter(function(s){ return !provided.has(normName(s.name)); }).map(function(s){ return s.name; });
+  let html='<div class="card" style="background:#F4F6EF">';
+  if(!missing.length){
+    html+='<div style="padding:12px;display:flex;gap:8px;align-items:flex-start"><svg viewBox="0 0 24 24" class="ic" style="flex:none"><rect x="3" y="3" width="18" height="18" rx="6" fill="#BACFA8" stroke="#4E7C5E" stroke-width="1.6"/><path d="M8 12 L11 15 L16 9" fill="none" stroke="#4E7C5E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>比对完成：无遗漏。</b>你提供的名单已覆盖平台现有全部 <b>'+DB.students.length+'</b> 名学生。</div></div>';
+  }else{
+    html+='<div class="section-title" style="margin-top:0">比对结果</div>';
+    html+='<div style="padding:4px 0;color:#8E3B34">以下 <b>'+missing.length+'</b> 名同学在平台里有记录，但你这份名单里<b>没有他们的名字</b>（可能已转走或漏报，请核实）：</div>';
+    html+='<div style="padding:8px 0;line-height:2.2">'+missing.map(function(n){ return '<span class="chip" style="background:#FBEAE8;color:#8E3B34;border-color:#E7B7B2">'+esc(n)+'</span>'; }).join(" ")+'</div>';
+  }
+  html+='</div>';
+  const box=document.getElementById("cmpResult"); if(box) box.innerHTML=html;
+}
