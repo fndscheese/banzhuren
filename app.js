@@ -1226,7 +1226,6 @@ function renderDetail(id){
   /* 个人信息双栏布局（有值才显示，无值跳过不留空位） */
   const metaTags=[];
   if(s.klass) metaTags.push(esc(s.klass));
-  if(s.gender) metaTags.push(esc(s.gender));
   if(s.stuNo) metaTags.push('学号 '+esc(s.stuNo));
   if(s.dorm) metaTags.push(esc(s.dorm)+(s.dormRoom?' '+esc(s.dormRoom):''));
   const metaHtml=metaTags.length?'<div class="st-meta-chips">'+metaTags.map(t=>'<span class="chip">'+t+'</span>').join('')+'</div>':'';
