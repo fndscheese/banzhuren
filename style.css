@@ -299,7 +299,7 @@ details[open] .fold-title::before{content:"▾ "}
 /* ===== 学生标签配色 ===== */
 .tag.tag-dorm{background:#E7EEDA;color:#ACC18B}
 .tag.tag-ok{background:#BACFA8;color:#4E7C5E}
-.tag.tag-leave{background:#EFE2D0;color:#855F2C}
+.tag.tag-leave{background:#EAACA9;color:#8E3B34}
 .tag.tag-long{background:#EAACA9;color:#8E3B34}
 
 /* ===== 首页：速记后内联今日记录 + 考勤/待办 双栏 ===== */
