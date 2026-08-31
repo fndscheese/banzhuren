@@ -239,8 +239,29 @@ function daysBetween(dateStr){ const t=new Date(dateStr+"T00:00:00"); const now=
    导致“曾”(zēng) 被当成“céng”排在 c 组。这里强制按姓氏读音取首字母用于排序。 */
 const PINYIN_OVERRIDE={"曾":"zeng","重":"chong","仇":"qiu","朴":"piao","查":"zha","单":"shan","解":"xie","区":"ou","乐":"yue","盛":"sheng","覃":"qin","燕":"yan","任":"ren","华":"hua","种":"chong","翟":"zhai","折":"she","秘":"bi","句":"gou","员":"yun","缪":"miao","宁":"ning","逄":"pang","蒲":"pu","亓":"qi","召":"shao","宿":"su","台":"tai","谭":"tan","谌":"chen","诸":"zhu","卓":"zhuo","訾":"zi","宗":"zong","邹":"zou","冼":"xian","葛":"ge","盖":"ge","哈":"ha","虎":"hu","呼":"hu","拉":"la","令":"ling","娄":"lou","沙":"sha","少":"shao","沈":"shen","石":"shi","帅":"shuai","司":"si","佘":"she","随":"sui","庹":"tuo","宛":"wan","韦":"wei","午":"wu","洗":"xian","相":"xiang","胥":"xu","烟":"yan","要":"yao","叶":"ye","殷":"yin","应":"ying","於":"yu","虞":"yu","员":"yun","昝":"zan","战":"zhan","仉":"zhang","掌":"zhang","甄":"zhen","政":"zheng","治":"zhi","竺":"zhu","颛":"zhuan","禚":"zhuo","宗":"zong","邹":"zou","俎":"zu"};
 function sortKey(name){ const c=(name||"").charAt(0); return PINYIN_OVERRIDE[c]||name; }
-/* 当日请假学生集合（按请假记录日期判定） */
-function todayLeaveSet(){ const t=todayStr(); return new Set(DB.records.filter(r=>r.type==="leave"&&r.date===t&&!(r.detail&&r.detail.returned)).map(r=>r.studentId)); }
+/* 请假日期工具：开始日期+天数 → 结束日期（开始当天算第1天；半天=当天） */
+function leaveEndDate(dateStr, days){
+  const d=new Date(dateStr+"T00:00:00");
+  const n=Math.max(1, Math.ceil(parseFloat(days)||1));
+  d.setDate(d.getDate()+n-1);
+  return fmtDate(d);
+}
+/* 今天是否落在某条请假记录的覆盖范围内（已销假不算） */
+function leaveCoversToday(r){
+  if(!r||r.type!=="leave"||(r.detail&&r.detail.returned)) return false;
+  const t=todayStr();
+  return r.date<=t&&t<=leaveEndDate(r.date,r.detail&&r.detail.days);
+}
+/* 日期范围的中文显示：8月30日 — 9月2日 */
+function fmtRange(dateStr, days){
+  const n=Math.max(1, Math.ceil(parseFloat(days)||1));
+  const f=d=>(d.getMonth()+1)+"月"+d.getDate()+"日";
+  const s=new Date(dateStr+"T00:00:00");
+  const e=new Date(s); e.setDate(e.getDate()+n-1);
+  return f(s)+" — "+f(e);
+}
+/* 当日请假学生集合（按请假覆盖日期判定：请几天，这期间每天都算请假） */
+function todayLeaveSet(){ return new Set(DB.records.filter(leaveCoversToday).map(r=>r.studentId)); }
 /* 考勤状态：长期未到校 > 今日请假 > 正常到校 */
 function attendStatus(s){
   if(s&&s.longAbsent) return "长期未到校";
@@ -312,7 +333,7 @@ function recordDesc(r){
   if(r.type==="violation") return (r.detail.desc?("说明："+r.detail.desc):"");
   if(r.type==="good") return "内容："+(r.detail.desc||"");
   if(r.type==="contact") return "方式："+(r.detail.channel||"")+"　内容："+(r.detail.content||"");
-  if(r.type==="leave") return "类型："+(r.detail.subtype||"")+"　时长："+(r.detail.days||1)+"天"+(r.detail.why?"　事由："+r.detail.why:"");
+  if(r.type==="leave") return "类型："+(r.detail.subtype||"")+"　时长："+(r.detail.days||1)+"天（"+fmtRange(r.date,r.detail.days)+"）"+(r.detail.why?"　事由："+r.detail.why:"");
   if(r.type==="score") return "考试："+(r.detail.exam||"")+"　科目："+(r.detail.subject||"")+(r.detail.absent?"　【缺考】":"　得分："+(r.detail.score||"-")+"/"+fullScoreOf(r.detail.subject));
   return "";
 }
@@ -518,10 +539,13 @@ function qnConfirmHtml(a){
     ? '<div id="qnTBlock"><div class="qn-hint" style="margin:2px 0 8px"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="4" width="14" height="14" rx="3" fill="#E4D58C" stroke="#C9B86A" stroke-width="1.5"/><path d="M8 9 H16 M8 12 H16 M8 15 H13" stroke="#8A7B3A" stroke-width="1.5" stroke-linecap="round"/><circle cx="15.5" cy="6.5" r="1.8" fill="#935855"/></svg> 将把下面内容作为<b>待办事项</b>加入首页待办列表（不生成档案记录）。每个学生会各加一条。</div></div>'
     : '<div id="qnTBlock" style="display:none"></div>';
   const isL=a.type==="leave";
+  const lRangeVal=(a.leave&&a.leave.date)?a.leave.date:todayStr();
+  const lRangeDays=(a.leave&&a.leave.days)||1;
   const lBlock=isL
     ? '<div id="qnLBlock"><div class="qn-hint" style="margin:2px 0 8px"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#ACC18B" stroke="#8A9E68" stroke-width="1.6"/><path d="M8 16 L15 9 L17 11 L10 18 L7.5 18.5 Z" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.4" stroke-linejoin="round"/></svg> 将登记为 <b>请假记录</b>（写入个人档案出勤），并自动在待办事项中加入「该生 请假」提醒。</div>'
       +'<div class="form-row"><label>请假类型</label><select id="qnLSub">'+LEAVE_TYPES.map(x=>'<option'+(a.leave&&a.leave.subtype===x?" selected":"")+'>'+x+'</option>').join("")+'</select></div>'
-      +'<div class="form-row"><label>请假时长（天）</label><input id="qnLDays" type="number" min="1" value="'+((a.leave&&a.leave.days)||1)+'"></div>'
+      +'<div class="form-row"><label>请假时长（天）</label><input id="qnLDays" type="number" min="0.5" step="0.5" value="'+lRangeDays+'" oninput="qnLRangeTip()"></div>'
+      +'<div class="form-row"><label>请假日期范围</label><div id="qnLRangeTip" class="qn-hint" style="font-size:12px;color:#4E7C5E;font-weight:600">'+fmtRange(lRangeVal,lRangeDays)+'</div></div>'
       +'<div class="form-row"><label>请假事由</label><textarea id="qnLWhy" placeholder="如：感冒发烧，家长代请">'+esc((a.leave&&a.leave.why)||"")+'</textarea></div></div>'
     : '<div id="qnLBlock" style="display:none"></div>';
   const addOpts=sortedStudents().filter(s=>!qnDoersState.includes(s.id)).map(s=>'<option value="'+s.id+'">'+esc(s.name)+'</option>').join("");
@@ -535,7 +559,7 @@ function qnConfirmHtml(a){
     + vBlock
     + tBlock
     + lBlock
-    +'<div class="form-row"><label>请假/记录日期</label><input id="qnDate" type="date" value="'+((a.type==="leave"&&a.leave)?a.leave.date:todayStr())+'"></div>'
+    +'<div class="form-row"><label>请假/记录日期</label><input id="qnDate" type="date" value="'+((a.type==="leave"&&a.leave)?a.leave.date:todayStr())+'" onchange="qnLRangeTip()"></div>'
     +'<button class="btn" onclick="confirmQuickNote()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#BACFA8" stroke="#4E7C5E" stroke-width="1.6"/><path d="M8 12 L11 15 L16 9" fill="none" stroke="#4E7C5E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> 确认存入档案</button>'
     +'<div class="qn-hint" style="margin-top:8px">识别结果仅供参照，可自由修改后再保存。</div>';
 }
@@ -546,6 +570,12 @@ function qnTypeToggle(){
   if(t) t.style.display=document.getElementById("qnType").value==="todo"?"block":"none";
   const l=document.getElementById("qnLBlock");
   if(l) l.style.display=document.getElementById("qnType").value==="leave"?"block":"none";
+}
+function qnLRangeTip(){
+  const dd=document.getElementById("qnLDays"), ds=document.getElementById("qnDate"), tip=document.getElementById("qnLRangeTip");
+  if(!dd||!ds||!tip) return;
+  const days=parseFloat(dd.value)||1;
+  tip.innerHTML='请假日期：<b>'+fmtRange(ds.value||todayStr(), days)+'</b>（共'+days+'天，这几天出勤都算请假）';
 }
 function confirmQuickNote(){
   if(!qnDoersState.length){ toast("请至少选择一名学生"); return; }
@@ -1215,8 +1245,7 @@ function assignStudentToDorm(sid, did){
 }
 /* 首页：今日请假的内宿生提醒 */
 function leaveDormAlert(){
-  const today=todayStr();
-  const leaves=DB.records.filter(r=>r.type==="leave"&&r.date===today);
+  const leaves=DB.records.filter(leaveCoversToday);
   if(!leaves.length) return "";
   const names=leaves.map(r=>getStudent(r.studentId)).filter(s=>s&&s.dorm==="内宿").map(s=>s.name).filter(Boolean);
   if(!names.length) return "";
@@ -1367,9 +1396,12 @@ function recHtml(r){
     if(badge) line+=badge+' ';
     line+='<span class="rec2-type">'+recTypeName(r.type)+'</span>';
   }
-  line+='<span class="rec2-date">'+esc(r.date)+'</span>';
+  line+='<span class="rec2-date">'+esc(r.date+(r.type==="leave"&&parseFloat(r.detail.days)>1?(" ~ "+leaveEndDate(r.date,r.detail.days)):""))+'</span>';
   let action='';
-  if(r.type==="leave"&&!r.detail.returned) action='<button class="btn small ghost" onclick="markReturn(\''+r.id+'\')">销假</button>';
+  if(r.type==="leave"){
+    action='<button class="btn small ghost" onclick="editLeave(\''+r.id+'\')">编辑</button>';
+    if(!r.detail.returned) action+='<button class="btn small ghost" style="margin-left:6px" onclick="markReturn(\''+r.id+'\')">销假</button>';
+  }
   if(r.type==="violation"&&r.detail.status!=="已处理") action='<button class="btn small ghost" onclick="markDone(\''+r.id+'\')">标记已处理</button>';
   let extra='';
   if(r.type==="violation"){
@@ -1385,6 +1417,38 @@ function recHtml(r){
     +'</div>';
 }
 function markReturn(rid){ const r=DB.records.find(x=>x.id===rid); if(r){ r.detail.returned=true; save(); toast("已销假"); renderDetail(curStudentId); } }
+/* 编辑请假记录：类型/起止日期/时长/事由/销假状态都可改 */
+function editLeave(rid){
+  const r=DB.records.find(x=>x.id===rid); if(!r) return;
+  const s=getStudent(r.studentId), d=r.detail||{};
+  showModal('<div class="sheet-head"><h3>编辑请假记录'+(s?" — "+esc(s.name):"")+'</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
+    +'<div class="form-row"><label>请假类型</label><select id="elSub">'+LEAVE_TYPES.map(x=>'<option'+(d.subtype===x?" selected":"")+'>'+x+'</option>').join("")+'</select></div>'
+    +'<div class="form-row"><label>请假开始日期</label><input id="elDate" type="date" value="'+r.date+'" onchange="elRangeTip()"></div>'
+    +'<div class="form-row"><label>请假时长（天）</label><input id="elDays" type="number" min="0.5" step="0.5" value="'+(d.days||1)+'" oninput="elRangeTip()"></div>'
+    +'<div class="form-row"><label>请假日期范围</label><div id="elRangeTip" class="qn-hint" style="font-size:12px;color:#4E7C5E;font-weight:600">'+fmtRange(r.date,d.days)+'</div></div>'
+    +'<div class="form-row"><label>请假事由</label><textarea id="elWhy">'+esc(d.why||"")+'</textarea></div>'
+    +'<div class="form-row"><label style="display:flex;align-items:center;gap:6px"><input id="elReturned" type="checkbox" style="width:18px;height:18px"'+(d.returned?" checked":"")+'> 已销假（已回校）</label></div>'
+    +'<button class="btn" onclick="saveLeaveEdit(\''+rid+'\')">保存修改</button>');
+  elRangeTip();
+}
+function elRangeTip(){
+  const ds=document.getElementById("elDate"), dd=document.getElementById("elDays"), tip=document.getElementById("elRangeTip");
+  if(ds&&dd&&tip) tip.textContent=fmtRange(ds.value||todayStr(), dd.value||1);
+}
+function saveLeaveEdit(rid){
+  const r=DB.records.find(x=>x.id===rid); if(!r) return;
+  const ds=document.getElementById("elDate").value||r.date;
+  const days=parseFloat(document.getElementById("elDays").value)||1;
+  r.date=ds;
+  r.detail.subtype=document.getElementById("elSub").value;
+  r.detail.days=days;
+  r.detail.why=document.getElementById("elWhy").value.trim();
+  r.detail.returned=document.getElementById("elReturned").checked;
+  /* 同步待办提醒：改时长/销假状态后，首页提醒跟着变 */
+  if(r.detail.todoId){ const t=DB.todos.find(x=>x.id===r.detail.todoId); if(t){ const stu=getStudent(r.studentId); t.text=(stu?stu.name:"")+" 请假（"+r.detail.subtype+"·"+days+"天）— 待回校销假"; t.done=r.detail.returned; } }
+  save(); closeModal(); toast("请假记录已更新");
+  renderDetail(curStudentId);
+}
 function markDone(rid){ const r=DB.records.find(x=>x.id===rid); if(r){ r.detail.status="已处理"; if(r.detail.todoId){ const t=DB.todos.find(x=>x.id===r.detail.todoId); if(t) t.done=true; } save(); toast("已标记处理"); renderDetail(curStudentId); } }
 function genPlanFromRec(rid){ const r=DB.records.find(x=>x.id===rid); if(r) openPlanModal(r.studentId, r.detail.subtype); }
 
@@ -1418,7 +1482,8 @@ function recordFormHtml(preStu){
       +'<div class="form-row"><label>附加图片（选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如截图、签字单等</div></div>';
   }else if(recordType==="leave"){
     mid='<div class="form-row"><label>请假类型</label><select id="rSub">'+LEAVE_TYPES.map(x=>'<option>'+x+'</option>').join("")+'</select></div>'
-      +'<div class="form-row"><label>请假时长（天）</label><input id="rDays" type="number" min="1" value="1"></div>'
+      +'<div class="form-row"><label>请假时长（天）</label><input id="rDays" type="number" min="0.5" step="0.5" value="1" oninput="rLRangeTip()"></div>'
+      +'<div class="form-row"><label>请假日期范围</label><div id="rLRangeTip" class="qn-hint" style="font-size:12px;color:#4E7C5E;font-weight:600">'+fmtRange(todayStr(),1)+'</div></div>'
       +'<div class="form-row"><label>请假事由</label><textarea id="rDesc" placeholder="例如：感冒发烧，家长代请"></textarea></div>';
   }else{
     mid='<div class="form-row"><label>考试名称（可自定义）</label><input id="rSub" list="examList2" placeholder="如：第一次月考"><datalist id="examList2">'+EXAMS.map(x=>'<option value="'+x+'">')+'</datalist></div>'
@@ -1427,7 +1492,7 @@ function recordFormHtml(preStu){
       +'<div class="form-row"><label style="display:flex;align-items:center;gap:6px"><input id="rAbsent" type="checkbox" style="width:18px;height:18px" onchange="toggleAbsent(this)"> 该科缺考（不填分数）</label></div>'
       +'<div class="form-row"><label>日期</label><input id="rDate" type="date" value="'+todayStr()+'"></div>';
   }
-  const dateRow = recordType==="score" ? "" : '<div class="form-row"><label>记录时间（默认今天，可改填补记的过去日期）</label><input id="rDate" type="date" value="'+todayStr()+'"></div>';
+  const dateRow = recordType==="score" ? "" : '<div class="form-row"><label>记录时间（默认今天，可改填补记的过去日期）</label><input id="rDate" type="date" value="'+todayStr()+'" onchange="rLRangeTip()"></div>';
   return '<div class="sheet-head"><h3>'+recTypeName(recordType)+'</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
     +'<div class="form-row"><label>学生</label>'+stuSel+'</div>'+mid+dateRow
     +'<button class="btn" onclick="saveRecord()">保存记录</button>';
@@ -1445,6 +1510,10 @@ function toggleAbsent(cb){
   const score=document.getElementById("rScore");
   if(score){ score.disabled=cb.checked; if(cb.checked) score.value=""; }
 }
+function rLRangeTip(){
+  const dd=document.getElementById("rDays"), ds=document.getElementById("rDate"), tip=document.getElementById("rLRangeTip");
+  if(dd&&ds&&tip) tip.textContent=fmtRange(ds.value||todayStr(), dd.value||1);
+}
 function saveRecord(){
   const sid=document.getElementById("rStu").value;
   if(!sid){ toast("请先选择学生"); return; }
@@ -1459,7 +1528,7 @@ function saveRecord(){
     rec.detail={desc:document.getElementById("rDesc").value.trim(), files:[]};
     rec.detail={channel:document.getElementById("rSub").value, content:document.getElementById("rDesc").value.trim(), files:[]};
   }else if(recordType==="leave"){
-    rec.detail={subtype:document.getElementById("rSub").value, days:parseInt(document.getElementById("rDays").value)||1, why:document.getElementById("rDesc").value.trim(), returned:false};
+    rec.detail={subtype:document.getElementById("rSub").value, days:parseFloat(document.getElementById("rDays").value)||1, why:document.getElementById("rDesc").value.trim(), returned:false};
   }else{
     const absent=document.getElementById("rAbsent")&&document.getElementById("rAbsent").checked;
     rec.detail={exam:document.getElementById("rSub").value, subject:document.getElementById("rSub2").value, score:absent?0:parseInt(document.getElementById("rScore").value)||0, absent:absent, date:document.getElementById("rDate").value};
@@ -2851,7 +2920,7 @@ function collectWarnings(){
   /* 2. 待销假：按住宿类型分走读 / 内宿；带上请假记录 id 与摘要，便于首页直接销假 */
   DB.records.filter(r=>r.type==="leave"&&r.detail&&!r.detail.returned).forEach(r=>{
     const s=getStudent(r.studentId); if(!s) return;
-    const item={name:s.name, id:s.id, rid:r.id, info:(r.detail.subtype||"请假")+" · "+(r.date||"")+(r.detail.why?(" · "+r.detail.why):"")};
+    const item={name:s.name, id:s.id, rid:r.id, info:(r.detail.subtype||"请假")+" · "+(r.date||"")+(parseFloat(r.detail.days)>1?(" ~ "+leaveEndDate(r.date,r.detail.days)):"")+(r.detail.why?(" · "+r.detail.why):"")};
     if(s.dorm==="内宿") out.leaveNeisu.push(item);
     else out.leaveZoudu.push(item); /* 走读 / 临时走读 / 未填 归走读类 */
   });
