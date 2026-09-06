@@ -1711,8 +1711,6 @@ function renderMine(){
     +'<div class="mine-row" onclick="exportData()"><span class="m-ico">⬇</span><div><div class="m-name">备份数据</div><div class="m-sub">把全部数据下载成文件，存到手机/微信里</div></div></div>'
     +'<div class="mine-row" onclick="document.getElementById(\'importFile\').click()"><span class="m-ico">⬆</span><div><div class="m-name">恢复数据</div><div class="m-sub">从备份文件导入（会覆盖当前数据）</div></div></div>'
     +'<input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">'
-    +'<div class="section-title">访问控制</div>'
-    +'<div class="mine-row" onclick="changePassForm()"><span class="m-ico">🔐</span><div><div class="m-name">修改访问密码</div><div class="m-sub">进入本工具的前置密码，初始 0727，可随时改</div></div></div>'
     +'<div class="section-title">使用说明</div>'
     +'<div class="card help-box">'
     +'<b>1. 数据存哪里？多设备怎么同步？</b><br>数据默认存在本机浏览器里。配置了"云端同步"后：<br>· 每次保存记录会自动上传云端；<br>· 换手机时，在手机上打开本页"配置云端"→点"从文本导入"（电脑端先点"复制配置"发微信给自己）→再点"从云端下载"，数据就全部过来了。<b>这条才是电脑↔手机的正路，不用同步码。</b><br>· 同步码（生成→微信→粘贴导入）只是完全没网时的备用法，数据大、微信传不动，平时别用它。<br>'
@@ -3040,7 +3038,8 @@ function doChangePass(){
 /* ========== 初始化 ========== */
 DB=load();
 loadCloudConf();
-showPassGate();
+/* 访问密码已取消：直接进入工作台（原 showPassGate() 密码门已停用） */
+switchView("home");
 
 /* ========== 名单比对 ========== */
 function normName(n){ return String(n||"").trim().replace(/\s+/g,""); }
