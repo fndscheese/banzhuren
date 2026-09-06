@@ -331,7 +331,7 @@ function recordBadge(r){
 function recordDesc(r){
   if(r.type==="talk") return "原因："+(r.detail.reason||"")+"　内容："+(r.detail.content||"");
   if(r.type==="violation") return (r.detail.desc?("说明："+r.detail.desc):"");
-  if(r.type==="good") return "内容："+(r.detail.desc||"");
+  if(r.type==="good") return "内容："+(r.detail.desc||r.detail.content||"");
   if(r.type==="contact") return "方式："+(r.detail.channel||"")+"　内容："+(r.detail.content||"");
   if(r.type==="leave") return "类型："+(r.detail.subtype||"")+"　时长："+(r.detail.days||1)+"天（"+fmtRange(r.date,r.detail.days)+"）"+(r.detail.why?"　事由："+r.detail.why:"");
   if(r.type==="score") return "考试："+(r.detail.exam||"")+"　科目："+(r.detail.subject||"")+(r.detail.absent?"　【缺考】":"　得分："+(r.detail.score||"-")+"/"+fullScoreOf(r.detail.subject));
@@ -686,6 +686,7 @@ function recItem(r){
     +'<div class="rec-desc">'+esc(recordDesc(r).substring(0,60))+'</div>'
     +'<div class="rec-badges">'+recordBadge(r)+'</div>'
     +filesHtml(r.detail.files)
+    +'<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn small ghost" onclick="editRecord(\''+r.id+'\')">编辑</button><button class="btn small ghost" style="color:#C25A52" onclick="deleteRecord(\''+r.id+'\')">删除</button></div>'
     +'</div></div>';
 }
 
@@ -1397,24 +1398,63 @@ function recHtml(r){
     line+='<span class="rec2-type">'+recTypeName(r.type)+'</span>';
   }
   line+='<span class="rec2-date">'+esc(r.date+(r.type==="leave"&&parseFloat(r.detail.days)>1?(" ~ "+leaveEndDate(r.date,r.detail.days)):""))+'</span>';
-  let action='';
+  /* 操作按钮组：所有类型都可「编辑」「删除」；保留销假/处理/反馈/方案 */
+  let acts=[];
   if(r.type==="leave"){
-    action='<button class="btn small ghost" onclick="editLeave(\''+r.id+'\')">编辑</button>';
-    if(!r.detail.returned) action+='<button class="btn small ghost" style="margin-left:6px" onclick="markReturn(\''+r.id+'\')">销假</button>';
+    acts.push('<button class="btn small ghost" onclick="editLeave(\''+r.id+'\')">编辑</button>');
+    if(!r.detail.returned) acts.push('<button class="btn small ghost" onclick="markReturn(\''+r.id+'\')">销假</button>');
+  }else{
+    acts.push('<button class="btn small ghost" onclick="editRecord(\''+r.id+'\')">编辑</button>');
   }
-  if(r.type==="violation"&&r.detail.status!=="已处理") action='<button class="btn small ghost" onclick="markDone(\''+r.id+'\')">标记已处理</button>';
-  let extra='';
   if(r.type==="violation"){
-    extra+='<button class="btn small ghost" onclick="feedbackForm(\''+r.id+'\')">写处理反馈</button>';
-    if(r.detail.subtype!=='其他') extra+='<button class="btn small ghost" style="margin-left:6px" onclick="genPlanFromRec(\''+r.id+'\')">生成方案</button>';
+    if(r.detail.status!=="已处理") acts.push('<button class="btn small ghost" onclick="markDone(\''+r.id+'\')">标记已处理</button>');
+    acts.push('<button class="btn small ghost" onclick="feedbackForm(\''+r.id+'\')">写处理反馈</button>');
+    if(r.detail.subtype!=='其他') acts.push('<button class="btn small ghost" onclick="genPlanFromRec(\''+r.id+'\')">生成方案</button>');
   }
+  acts.push('<button class="btn small ghost" style="color:#C25A52" onclick="deleteRecord(\''+r.id+'\')">删除</button>');
   return '<div class="rec2">'
     +'<div class="rec2-line">'+line+'</div>'
     +'<div class="rec2-desc">'+esc(recordDesc(r))+'</div>'
     +filesHtml(r.detail.files)
     +feedbackHtml(r)
-    +(extra?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+extra+(action?'<button class="btn small ghost" style="margin-left:6px" onclick="'+ (r.type==="leave"?'markReturn':'markDone') +'(\''+r.id+'\')">'+(r.type==="leave"?"销假":"标记已处理")+'</button>':'')+'</div>':(action?'<div style="margin-top:6px">'+action+'</div>':""))
+    +(acts.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+acts.join('')+'</div>':"")
     +'</div>';
+}
+let editingRecId=null;
+/* 通用编辑入口：请假走专用编辑，其它类型用通用表单预填 */
+function editRecord(rid){
+  const r=DB.records.find(x=>x.id===rid); if(!r) return;
+  if(r.type==="leave"){ editLeave(rid); return; }
+  editingRecId=rid; recordType=r.type;
+  showModal(recordFormHtml(r.studentId||"", r));
+}
+/* 删除记录：二次确认（同步删掉关联的待办提醒） */
+function deleteRecord(rid){
+  const r=DB.records.find(x=>x.id===rid); if(!r) return;
+  const s=getStudent(r.studentId);
+  const label=(s?s.name+"的":"")+recTypeName(r.type);
+  showModal('<div class="sheet-head"><h3>删除'+label+'</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
+    +'<div class="qn-hint" style="font-size:13px;color:#8E3B34">删除后这条记录找不回来，确认要删吗？</div>'
+    +'<div style="background:#fdf3f2;border:1px solid #f0c8c4;border-radius:10px;padding:10px 12px;font-size:12px;color:#5c4a48;margin:10px 0;line-height:1.8">'+esc(r.date)+"　"+esc(recordDesc(r))+'</div>'
+    +'<button class="btn" style="background:#C25A52;border-color:#A3443D;color:#fff" onclick="confirmDeleteRecord(\''+rid+'\')">确认删除</button> '
+    +'<button class="btn ghost" onclick="closeModal()">取消</button>');
+}
+function confirmDeleteRecord(rid){
+  const idx=DB.records.findIndex(x=>x.id===rid);
+  if(idx<0){ closeModal(); return; }
+  const r=DB.records[idx];
+  if(r.detail&&r.detail.todoId){ const ti=DB.todos.findIndex(t=>t.id===r.detail.todoId); if(ti>=0) DB.todos.splice(ti,1); }
+  DB.records.splice(idx,1);
+  save(); closeModal(); toast("记录已删除");
+  refreshAfterRecChange();
+}
+/* 记录增删改后的刷新：按当前所在页面正确重画 */
+function refreshAfterRecChange(){
+  const act=document.querySelector(".tab.active");
+  const v=act?act.getAttribute("data-view"):"";
+  if(v==="records"){ renderRecords(); return; }
+  if(navStack&&navStack.length){ renderDetail(curStudentId); return; }
+  renderHome();
 }
 function markReturn(rid){ const r=DB.records.find(x=>x.id===rid); if(r){ r.detail.returned=true; save(); toast("已销假"); renderDetail(curStudentId); } }
 /* 编辑请假记录：类型/起止日期/时长/事由/销假状态都可改 */
@@ -1455,31 +1495,36 @@ function genPlanFromRec(rid){ const r=DB.records.find(x=>x.id===rid); if(r) open
 /* ========== 记录功能 ========== */
 let recordType="talk";
 function quickAdd(type,stuId){
-  recordType=type;
+  editingRecId=null; recordType=type;
   const defaultStu=stuId||"";
   showModal(recordFormHtml(defaultStu));
 }
-function recordFormHtml(preStu){
-  const stuOptions=studentOptionsHtml(preStu);
+function recordFormHtml(preStu, rec){
+  const isEdit=!!rec;
+  const stuOptions=studentOptionsHtml(rec?rec.studentId:preStu);
   const stuSel='<select id="rStu">'+(DB.students.length?'<option value="">选择学生…</option>'+stuOptions:'<option value="">（请先添加学生）</option>')+'</select>';
+  const d=(rec&&rec.detail)?rec.detail:{};
+  const recDate=(rec&&rec.date)?rec.date:todayStr();
+  /* 下拉选项：原值不在预设列表里时自动补一个选项并选中 */
+  const optHtml=(arr,val)=>{ const extra=val&&arr.indexOf(val)<0?'<option value="'+esc(val)+'" selected>'+esc(val)+'</option>':''; return extra+arr.map(x=>'<option'+(val===x?' selected':'')+'>'+x+'</option>').join(''); };
   let mid="";
   if(recordType==="talk"){
-    mid='<div class="form-row"><label>谈话原因</label><select id="rSub">'+TALK_REASONS.map(x=>'<option>'+x+'</option>').join("")+'</select></div>'
-      +'<div class="form-row"><label>谈话内容摘要</label><textarea id="rDesc" placeholder="聊了什么、学生的态度和反应"></textarea></div>'
-      +'<div class="form-row"><label>下一步跟进</label><input id="rExtra" placeholder="例如：下周抽查他的作业情况"></div>'
-      +'<div class="form-row"><label>附加图片（谈话记录/照片，选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">自动存云端，Word导出时也会带上</div></div>';
+    mid='<div class="form-row"><label>谈话原因</label><select id="rSub">'+optHtml(TALK_REASONS,d.reason)+'</select></div>'
+      +'<div class="form-row"><label>谈话内容摘要</label><textarea id="rDesc" placeholder="聊了什么、学生的态度和反应">'+esc(d.content||"")+'</textarea></div>'
+      +'<div class="form-row"><label>下一步跟进</label><input id="rExtra" placeholder="例如：下周抽查他的作业情况" value="'+esc(d.follow||"")+'"></div>'
+      +'<div class="form-row"><label>附加图片（谈话记录/照片，选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">自动存云端，Word导出时也会带上'+(isEdit?'；原有图片保存时保留':'')+'</div></div>';
   }else if(recordType==="violation"){
-    mid='<div class="form-row"><label>违纪类型</label><select id="rSub">'+VIOLATION_TYPES.map(x=>'<option>'+x+'</option>').join("")+'</select></div>'
-      +'<div class="form-row"><label>严重程度</label><select id="rLevel"><option>一般</option><option>严重</option></select></div>'
-      +'<div class="form-row"><label>事情经过（尽量写清楚，生成方案用）</label><textarea id="rDesc" placeholder="例如：课间和同桌推搡，起因是争抢篮球"></textarea></div>'
-      +'<div class="form-row"><label>附加材料（检讨书照片等，选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如检讨书拍照上传，自动存云端</div></div>';
+    mid='<div class="form-row"><label>违纪类型</label><select id="rSub">'+optHtml(VIOLATION_TYPES,d.subtype)+'</select></div>'
+      +'<div class="form-row"><label>严重程度</label><select id="rLevel"><option'+(d.level!=="严重"?" selected":"")+'>一般</option><option'+(d.level==="严重"?" selected":"")+'>严重</option></select></div>'
+      +'<div class="form-row"><label>事情经过（尽量写清楚，生成方案用）</label><textarea id="rDesc" placeholder="例如：课间和同桌推搡，起因是争抢篮球">'+esc(d.desc||"")+'</textarea></div>'
+      +'<div class="form-row"><label>附加材料（检讨书照片等，选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如检讨书拍照上传，自动存云端'+(isEdit?'；原有图片保存时保留':'')+'</div></div>';
   }else if(recordType==="good"){
-    mid='<div class="form-row"><label>做了什么好事</label><textarea id="rDesc" style="min-height:80px" placeholder="例如：主动帮助同学补习功课；拾金不昧…"></textarea></div>'
-      +'<div class="form-row"><label>附加图片（选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如奖状、照片等</div></div>';
+    mid='<div class="form-row"><label>做了什么好事</label><textarea id="rDesc" style="min-height:80px" placeholder="例如：主动帮助同学补习功课；拾金不昧…">'+esc(d.desc||d.content||"")+'</textarea></div>'
+      +'<div class="form-row"><label>附加图片（选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如奖状、照片等'+(isEdit?'；原有图片保存时保留':'')+'</div></div>';
   }else if(recordType==="contact"){
-    mid='<div class="form-row"><label>沟通方式</label><select id="rSub">'+CONTACT_CHANNELS.map(x=>'<option>'+x+'</option>').join("")+'</select></div>'
-      +'<div class="form-row"><label>沟通内容摘要</label><textarea id="rDesc" style="min-height:80px" placeholder="和哪位家长聊了什么、家长的态度、约定的事项"></textarea></div>'
-      +'<div class="form-row"><label>附加图片（选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如截图、签字单等</div></div>';
+    mid='<div class="form-row"><label>沟通方式</label><select id="rSub">'+optHtml(CONTACT_CHANNELS,d.channel)+'</select></div>'
+      +'<div class="form-row"><label>沟通内容摘要</label><textarea id="rDesc" style="min-height:80px" placeholder="和哪位家长聊了什么、家长的态度、约定的事项">'+esc(d.content||"")+'</textarea></div>'
+      +'<div class="form-row"><label>附加图片（选填）</label><input type="file" id="rFiles" class="file-input" multiple accept="image/*"><div class="upload-note">如截图、签字单等'+(isEdit?'；原有图片保存时保留':'')+'</div></div>';
   }else if(recordType==="leave"){
     mid='<div class="form-row"><label>请假类型</label><select id="rSub">'+LEAVE_TYPES.map(x=>'<option>'+x+'</option>').join("")+'</select></div>'
       +'<div class="form-row"><label>请假时长（天）</label><input id="rDays" type="number" min="0.5" step="0.5" value="1" oninput="rLRangeTip()"></div>'
@@ -1492,10 +1537,11 @@ function recordFormHtml(preStu){
       +'<div class="form-row"><label style="display:flex;align-items:center;gap:6px"><input id="rAbsent" type="checkbox" style="width:18px;height:18px" onchange="toggleAbsent(this)"> 该科缺考（不填分数）</label></div>'
       +'<div class="form-row"><label>日期</label><input id="rDate" type="date" value="'+todayStr()+'"></div>';
   }
-  const dateRow = recordType==="score" ? "" : '<div class="form-row"><label>记录时间（默认今天，可改填补记的过去日期）</label><input id="rDate" type="date" value="'+todayStr()+'" onchange="rLRangeTip()"></div>';
-  return '<div class="sheet-head"><h3>'+recTypeName(recordType)+'</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
+  const dateRow = recordType==="score" ? "" : '<div class="form-row"><label>记录时间（默认今天，可改填补记的过去日期）</label><input id="rDate" type="date" value="'+recDate+'" onchange="rLRangeTip()"></div>';
+  return '<div class="sheet-head"><h3>'+(isEdit?"编辑 ":"")+recTypeName(recordType)+'</h3><button class="close-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="3" width="18" height="18" rx="6" fill="#FFFFFF" stroke="#8A9E68" stroke-width="1.6"/><path d="M9 9 L15 15 M15 9 L9 15" stroke="#8A9E68" stroke-width="2" stroke-linecap="round"/></svg></button></div>'
     +'<div class="form-row"><label>学生</label>'+stuSel+'</div>'+mid+dateRow
-    +'<button class="btn" onclick="saveRecord()">保存记录</button>';
+    +'<button class="btn" onclick="saveRecord()">'+(isEdit?"保存修改":"保存记录")+'</button>'
+    +'<div class="qn-hint" style="margin-top:8px">'+(isEdit?"改完点「保存修改」即生效；原图片自动保留":"识别结果仅供参照，可自由修改后再保存。")+'</div>';
 }
 function updateScoreMax(){
   const sel=document.getElementById("rSub2");
@@ -1519,30 +1565,47 @@ function saveRecord(){
   if(!sid){ toast("请先选择学生"); return; }
   const di=document.getElementById("rDate");
   const recDate=(di&&di.value)?di.value:todayStr();
-  const rec={id:uid(), studentId:sid, type:recordType, date:recDate, detail:{}};
+  /* 编辑模式：在原记录上改，保留原 id / 关联待办 / 已上传图片 / 处理状态 */
+  const oldRec=editingRecId?DB.records.find(x=>x.id===editingRecId):null;
+  const rec=oldRec?oldRec:{id:uid(), studentId:sid, type:recordType, date:recDate, detail:{}};
+  rec.studentId=sid; rec.type=recordType; rec.date=recDate;
+  const keepFiles=(oldRec&&oldRec.detail&&Array.isArray(oldRec.detail.files))?oldRec.detail.files:[];
   if(recordType==="talk"){
-    rec.detail={reason:document.getElementById("rSub").value, content:document.getElementById("rDesc").value.trim(), follow:document.getElementById("rExtra").value.trim(), files:[]};
+    rec.detail={reason:document.getElementById("rSub").value, content:document.getElementById("rDesc").value.trim(), follow:document.getElementById("rExtra").value.trim(), files:keepFiles};
   }else if(recordType==="violation"){
-    rec.detail={subtype:document.getElementById("rSub").value, level:document.getElementById("rLevel").value, desc:document.getElementById("rDesc").value.trim(), status:"待处理", files:[]};
+    rec.detail={subtype:document.getElementById("rSub").value, level:document.getElementById("rLevel").value, desc:document.getElementById("rDesc").value.trim(), files:keepFiles};
+    if(oldRec&&oldRec.detail){
+      if(oldRec.detail.status!==undefined) rec.detail.status=oldRec.detail.status;
+      if(oldRec.detail.todoId) rec.detail.todoId=oldRec.detail.todoId;
+      if(oldRec.detail.result) rec.detail.result=oldRec.detail.result;
+    }else{ rec.detail.status="待处理"; }
   }else if(recordType==="good"){
-    rec.detail={desc:document.getElementById("rDesc").value.trim(), files:[]};
-    rec.detail={channel:document.getElementById("rSub").value, content:document.getElementById("rDesc").value.trim(), files:[]};
+    rec.detail={desc:document.getElementById("rDesc").value.trim(), files:keepFiles};
+  }else if(recordType==="contact"){
+    rec.detail={channel:document.getElementById("rSub").value, content:document.getElementById("rDesc").value.trim(), files:keepFiles};
   }else if(recordType==="leave"){
-    rec.detail={subtype:document.getElementById("rSub").value, days:parseFloat(document.getElementById("rDays").value)||1, why:document.getElementById("rDesc").value.trim(), returned:false};
+    const days=parseFloat(document.getElementById("rDays").value)||1;
+    rec.detail={subtype:document.getElementById("rSub").value, days:days, why:document.getElementById("rDesc").value.trim(), returned:oldRec&&oldRec.detail?!!oldRec.detail.returned:false, files:keepFiles};
+    if(oldRec&&oldRec.detail&&oldRec.detail.todoId) rec.detail.todoId=oldRec.detail.todoId;
   }else{
     const absent=document.getElementById("rAbsent")&&document.getElementById("rAbsent").checked;
-    rec.detail={exam:document.getElementById("rSub").value, subject:document.getElementById("rSub2").value, score:absent?0:parseInt(document.getElementById("rScore").value)||0, absent:absent, date:document.getElementById("rDate").value};
+    rec.detail={exam:document.getElementById("rSub").value, subject:document.getElementById("rSub2").value, score:absent?0:parseInt(document.getElementById("rScore").value)||0, absent:absent, date:recDate};
   }
   const files=document.getElementById("rFiles")?[...document.getElementById("rFiles").files]:[];
   const finish=()=>{
     if(rec.type==="violation"){
       const stu=getStudent(sid);
-      rec.detail.todoId=uid();
-      DB.todos.push({id:rec.detail.todoId, text:"处理违纪："+(stu?stu.name:"")+"·"+(rec.detail.subtype||""), done:false, createdAt:todayStr()});
+      if(oldRec&&rec.detail.todoId){
+        const t=DB.todos.find(x=>x.id===rec.detail.todoId);
+        if(t) t.text="处理违纪："+(stu?stu.name:"")+"·"+(rec.detail.subtype||"");
+      }else{
+        rec.detail.todoId=uid();
+        DB.todos.push({id:rec.detail.todoId, text:"处理违纪："+(stu?stu.name:"")+"·"+(rec.detail.subtype||""), done:false, createdAt:todayStr()});
+      }
     }
-    DB.records.push(rec);
-    save(); closeModal(); toast("记录已保存");
-    if(navStack.length){ renderDetail(curStudentId); } else { renderHome(); }
+    if(!oldRec) DB.records.push(rec);
+    save(); closeModal(); toast(oldRec?"记录已更新":"记录已保存");
+    refreshAfterRecChange();
   };
   if(files.length&&rec.detail.files){
     let pending=files.length, errs=0;
