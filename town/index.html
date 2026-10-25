@@ -290,17 +290,27 @@ button,input,select{font-family:inherit;}
   .pfeed{font-size:10px;color:#8aa197;margin-top:2px;}
   .pet2{font-size:11px;color:#8aa197;padding-top:4px;}
 
-/* 点选记分：作用范围切换 */
-  .scopeBar{display:flex;align-items:center;gap:6px;margin-bottom:12px;padding:9px 12px;
-    background:#fff;border:1px solid var(--line);border-radius:10px;flex-wrap:wrap;}
-  .scopeBar .sl{font-size:12px;color:var(--ink3);font-weight:600;}
-  .scopeBar button{border:0;background:#F1F5F6;color:var(--ink2);font-size:12.5px;
-    padding:6px 13px;border-radius:8px;cursor:pointer;font-family:inherit;}
-  .scopeBar button:hover{background:#E4ECEE;}
-  .scopeBar button.on{background:#0F2B27;color:#fff;font-weight:600;}
-  .scopeBar .tip{margin-left:auto;font-size:11.5px;color:#A8B7B3;}
-  .grpHint{font-size:11.5px;color:var(--brand-d);background:#F4FBF8;border-radius:8px;
-    padding:7px 11px;margin-bottom:10px;line-height:1.75;}
+/* 点选记分：按小组选人 */
+  .gselBar{background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:10px 13px;margin-bottom:12px;}
+  .gselBar .sl{font-size:12px;color:var(--ink3);font-weight:600;margin-right:8px;}
+  .gselBar select{border:1px solid var(--line);border-radius:8px;padding:6px 10px;
+    font-size:12.5px;font-family:inherit;color:var(--ink);}
+  .gBtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;
+    border-top:1px dashed var(--line);}
+  .gBtns button{border:1px solid var(--line);background:#fff;color:var(--ink2);
+    font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;}
+  .gBtns button:hover{border-color:#BEE7DE;background:#F7FBFA;}
+  .gBtns button.on{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .gBtns button b{font-weight:700;}
+  .stuGroupBlock{margin-bottom:13px;background:#fff;border:1px solid var(--line);
+    border-radius:11px;padding:11px 13px;}
+  .sgHead{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+  .sgHead span{font-size:13px;font-weight:700;}
+  .sgHead i{font-style:normal;font-size:11px;color:var(--ink3);}
+  .sgHead button{margin-left:auto;border:0;background:#EFF4F5;color:var(--ink2);
+    font-size:11.5px;padding:4px 11px;border-radius:7px;cursor:pointer;font-family:inherit;}
+  .sgHead button.on{background:var(--brand);color:#fff;}
 
 /* 五类小组标签 */
   .gtag{display:inline-block;font-size:11px;background:#F1F5F6;border-radius:5px;
@@ -440,7 +450,7 @@ button,input,select{font-family:inherit;}
       <a data-v="groups"><span class="ic">🧩</span><span>分组管理</span></a>
       <a data-v="buildings"><span class="ic">🏗</span><span>建筑图鉴</span></a>
     </nav>
-    <div class="foot">v13 · 个人/整组切换<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v14 · 按小组选人<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -3519,7 +3529,7 @@ document.querySelectorAll('.tbtn[data-sky]').forEach(function (b) {
    ===================================================================== */
 var scoreMode = 'pick';
 var manualGrpType = 'class';   /* 手动录分里"按小组"作用于哪一类 */
-var pickScope = 'auto';       /* 点选记分的作用范围：auto=跟随规则 / self=只给个人 / group=给整组 */
+var pickGroupBy = 'none';     /* 点选记分：按哪一类小组来看人（none=不分组） */
 var pickedStu = {};
 var ruleCat = '学习';
 var undoBuf = null;
@@ -3548,36 +3558,18 @@ function renderScore() {
 
 /* ---------- 点选模式 ---------- */
 function pickPaneHtml() {
+  /* ---- 规则分类 + 规则卡 ---- */
   var catTabs = '<div class="cats">' + RULE_CATS.map(function (c) {
     return '<button data-rc="' + c + '"' + (c === ruleCat ? ' class="on"' : '') + '>' + c + '</button>';
   }).join('') + '</div>';
 
-  /* ===== 作用范围切换 =====
-     同一条规则既能给个人，也能给整组——不用维护两套规则 */
-  var scopes = [
-    { id: 'auto',  name: '跟随规则' },
-    { id: 'self',  name: '👤 只给个人' },
-    { id: 'group', name: '👥 给整组' }
-  ];
-  var scopeBar = '<div class="scopeBar"><span class="sl">作用范围</span>' +
-    scopes.map(function (x) {
-      return '<button data-ps="' + x.id + '"' + (x.id === pickScope ? ' class="on"' : '') + '>' + x.name + '</button>';
-    }).join('') +
-    '<span class="tip">' + (pickScope === 'self'
-      ? '点规则只加给选中的人'
-      : (pickScope === 'group'
-        ? '点规则加给选中人所在的整组（类型见规则角标）'
-        : '按每条规则自己的设定（个人 / 整组 / 全班）')) + '</span></div>';
-
   var grid = '<div class="ruleGrid">';
   rulesByCat(ruleCat).forEach(function (r) {
     var neg = r.v < 0;
-    /* 角标：按当前作用范围显示，让老师一眼知道会加给谁 */
-    var eff = (r.scope === 'class') ? 'class' : (pickScope === 'auto' ? r.scope : pickScope);
     var tag = '';
-    if (eff === 'class') {
+    if (r.scope === 'class') {
       tag = '<i>全班</i>';
-    } else if (eff === 'group') {
+    } else if (r.scope === 'group') {
       var gt = gtDef(r.grp || 'class');
       tag = '<i>' + gt.icon + ' ' + gt.short + '组</i>';
     } else {
@@ -3593,47 +3585,71 @@ function pickPaneHtml() {
 
   var n = Object.keys(pickedStu).length;
 
-  /* 已选的人分属哪几组（给"整组"模式一个提示） */
-  var grpHint = '';
-  if (pickScope === 'group' && n > 0) {
-    var byType = {};
-    Object.keys(pickedStu).forEach(function (id) {
-      var st = DB.students[id];
-      if (!st) return;
-      GROUP_TYPES.forEach(function (t) {
-        if (!byType[t.id]) byType[t.id] = {};
-        byType[t.id][stuGroup(st, t.id)] = 1;
-      });
-    });
-    var parts = [];
-    GROUP_TYPES.forEach(function (t) {
-      var ks = Object.keys(byType[t.id] || {});
-      if (ks.length) {
-        parts.push(t.short + ' ' + ks.map(function (k) { return groupName(t.id, +k); }).join('、'));
-      }
-    });
-    if (parts.length) grpHint = '<div class="grpHint">选中的人分别在这些组：' + parts.join(' ／ ') + '</div>';
-  }
-
+  /* ---- 已选人数条 ---- */
   var bar = '<div class="pickBar">' +
     '<span>已选 <b>' + n + '</b> 人</span>' +
-    '<button data-act="all">全选</button>' +
+    '<button data-act="all">全班全选</button>' +
     '<button data-act="none">清空</button>' +
-    '<span class="hint">先点学生，再点上面的规则</span></div>' + grpHint;
+    '<span class="hint">先选人（可以整组选），再点上面的规则</span></div>';
 
-  var sg = '<div class="stuGrid">';
-  DB.students.forEach(function (s) {
+  /* ---- 选人方式：按哪一类小组看人 ---- */
+  var gsel = '<div class="gselBar">' +
+    '<span class="sl">按小组选人</span>' +
+    '<select id="pgSel">' +
+      '<option value="none"' + (pickGroupBy === 'none' ? ' selected' : '') + '>全班一起看（不分组）</option>' +
+      GROUP_TYPES.map(function (t) {
+        return '<option value="' + t.id + '"' + (pickGroupBy === t.id ? ' selected' : '') + '>' +
+          t.icon + ' 按' + t.name + '</option>';
+      }).join('') +
+    '</select>';
+
+  /* 选了某类 → 出现"整组一键选"按钮 */
+  if (pickGroupBy !== 'none') {
+    var usedG = Math.max(groupUsedCount(pickGroupBy), 1);
+    gsel += '<div class="gBtns">';
+    for (var i = 0; i < usedG; i++) {
+      var mem = membersOf(pickGroupBy, i);
+      if (!mem.length) continue;
+      var allOn = mem.every(function (m) { return pickedStu[m.id]; });
+      gsel += '<button class="' + (allOn ? 'on' : '') + '" data-gsel="' + i + '">' +
+        groupName(pickGroupBy, i) + ' <b>' + mem.length + '人</b>' +
+        (allOn ? ' <span style="font-size:10px">✓已选</span>' : '') + '</button>';
+    }
+    gsel += '</div>';
+  }
+  gsel += '</div>';
+
+  /* ---- 学生卡片 ---- */
+  function stuCard(s) {
     var b = balOf(s);
-    sg += '<div class="stuPick' + (pickedStu[s.id] ? ' on' : '') + '" data-id="' + s.id + '">' +
+    return '<div class="stuPick' + (pickedStu[s.id] ? ' on' : '') + '" data-id="' + s.id + '">' +
       '<b>' + s.name + '</b>' +
       '<span>' + (b < 0 ? '欠' + (-b) : b + ' 分') + '</span></div>';
-  });
-  sg += '</div>';
+  }
 
-  return scopeBar + catTabs + grid + bar + sg;
+  var sg;
+  if (pickGroupBy === 'none') {
+    sg = '<div class="stuGrid">' + DB.students.map(stuCard).join('') + '</div>';
+  } else {
+    var usedG2 = Math.max(groupUsedCount(pickGroupBy), 1);
+    sg = '';
+    for (var j = 0; j < usedG2; j++) {
+      var mem2 = membersOf(pickGroupBy, j);
+      if (!mem2.length) continue;
+      var allOn2 = mem2.every(function (m) { return pickedStu[m.id]; });
+      sg += '<div class="stuGroupBlock">' +
+        '<div class="sgHead"><span>' + groupName(pickGroupBy, j) + '</span>' +
+        '<i>' + mem2.length + ' 人</i>' +
+        '<button data-gsel="' + j + '" class="' + (allOn2 ? 'on' : '') + '">' +
+          (allOn2 ? '取消本组' : '整组选中') + '</button></div>' +
+        '<div class="stuGrid">' + mem2.map(stuCard).join('') + '</div></div>';
+    }
+  }
+
+  return catTabs + grid + bar + gsel + sg;
 }
 
-/* ---------- 手动模式（原来的双格） ---------- *//* ---------- 手动模式（原来的双格） ---------- */
+/* ---------- 手动模式（原来的双格） ---------- *//* ---------- 手动模式（原来的双格） ---------- *//* ---------- 手动模式（原来的双格） ---------- */
 function manualPaneHtml() {
   var h = '<div class="manualBox">';
   h += '<div class="gline"><span class="gname">全班</span>' +
@@ -3685,9 +3701,9 @@ function applyRule(rid) {
   RULES.forEach(function (r) { if (r.id === rid) rule = r; });
   if (!rule) return;
 
-  /* 实际作用范围：全班规则不受影响；其他规则可被"作用范围"开关覆盖 */
+  /* 作用范围由规则本身决定：
+     self=只给选中的人 / group=给选中人所在的那类整组 / class=全班 */
   var effScope = rule.scope || 'self';
-  if (effScope !== 'class' && pickScope !== 'auto') effScope = pickScope;
 
   var targets = [];
   if (effScope === 'class') {
@@ -3815,10 +3831,18 @@ function bindScoreEvents2() {
       renderScore();
       return;
     }
-    /* 作用范围切换 */
-    if (btn.getAttribute('data-ps')) {
-      pickScope = btn.getAttribute('data-ps');
+    /* 整组一键选中 / 取消 */
+    if (btn.getAttribute('data-gsel') !== null) {
+      var gi = parseInt(btn.getAttribute('data-gsel'), 10);
+      var mem = membersOf(pickGroupBy, gi);
+      var allOn = mem.length > 0 && mem.every(function (m) { return pickedStu[m.id]; });
+      mem.forEach(function (m) {
+        if (allOn) delete pickedStu[m.id];
+        else pickedStu[m.id] = true;
+      });
       renderScore();
+      toast(allOn ? ('已取消 ' + groupName(pickGroupBy, gi))
+                  : ('已选中 ' + groupName(pickGroupBy, gi) + ' 全部 ' + mem.length + ' 人'));
       return;
     }
     /* 规则分类 */
@@ -3847,6 +3871,14 @@ function bindScoreEvents2() {
     if (btn.getAttribute('data-all') || btn.getAttribute('data-g') !== null) {
       fillManual(btn);
       return;
+    }
+  });
+
+  /* 点选记分：切换"按小组选人"的类型 */
+  wrap.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'pgSel') {
+      pickGroupBy = e.target.value;
+      renderScore();
     }
   });
 
