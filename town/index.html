@@ -450,7 +450,7 @@ button,input,select{font-family:inherit;}
       <a data-v="groups"><span class="ic">🧩</span><span>分组管理</span></a>
       <a data-v="buildings"><span class="ic">🏗</span><span>建筑图鉴</span></a>
     </nav>
-    <div class="foot">v17 · 课堂违纪两项<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v18 · 宿舍与值日细则<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -697,12 +697,15 @@ var RULES = [
   { id:'d10', cat:'纪律', name:'宿舍违纪',     v:-2,  scope:'self', grp:'dorm' },
   { id:'d11', cat:'纪律', name:'趴桌睡觉',     v:-1,  scope:'self', grp:'class' },
   { id:'d12', cat:'纪律', name:'不认真听讲',   v:-1,  scope:'self', grp:'class' },
+  { id:'d13', cat:'纪律', name:'体育训练无故不训练', v:-2, scope:'self', grp:'class' },
 
-  /* --- 卫生 --- */
-  { id:'w1', cat:'卫生', name:'值日认真',      v:2,  scope:'self', grp:'duty' },
+  /* --- 卫生（值日） --- */
+  { id:'w1', cat:'卫生', name:'值日认真',      v:1,  scope:'self', grp:'duty' },
   { id:'w2', cat:'卫生', name:'主动捡垃圾',    v:1,  scope:'self', grp:'duty' },
   { id:'w3', cat:'卫生', name:'卫生评优',      v:2,  scope:'group', grp:'duty' },
   { id:'w4', cat:'卫生', name:'卫生不合格',    v:-2, scope:'group', grp:'duty' },
+  { id:'w5', cat:'卫生', name:'值日迟到',      v:-1, scope:'self', grp:'duty' },
+  { id:'w6', cat:'卫生', name:'值日缺勤',      v:-2, scope:'self', grp:'duty' },
 
   /* --- 品德 --- */
   { id:'m1', cat:'品德', name:'好人好事',      v:2,  scope:'self', grp:'class' },
@@ -726,6 +729,8 @@ var RULES = [
   { id:'n2', cat:'纪律', name:'晚修违纪',      v:-2, scope:'group', grp:'night' },
 
   /* --- 宿舍（每月一评；big=突破单日上限的特别奖励） --- */
+  { id:'r6', cat:'宿舍', name:'宿舍卫生达标',  v:1,  scope:'group', grp:'dorm' },
+  { id:'r7', cat:'宿舍', name:'宿舍卫生不达标', v:-1, scope:'group', grp:'dorm' },
   { id:'r1', cat:'宿舍', name:'文明宿舍',      v:15, scope:'group', grp:'dorm', big:true },
   { id:'r2', cat:'宿舍', name:'宿舍卫生优秀',  v:5,  scope:'group', grp:'dorm', big:true },
   { id:'r3', cat:'宿舍', name:'宿舍纪律扣分',  v:-5, scope:'group', grp:'dorm' },
