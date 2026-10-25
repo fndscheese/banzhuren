@@ -465,7 +465,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v22 · 小镇清空<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v23 · 基金归零<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -3046,6 +3046,7 @@ function renderOverview() {
       '</div>' +
       '<button class="cbtn ghost" id="btnDonate">捐分</button>' +
       '<button class="cbtn ghost" id="btnAdjClass">调整</button>' +
+      '<button class="cbtn ghost" id="btnZeroFund">基金归零</button>' +
       '<button class="cbtn" id="btnMovie"' + (canGet ? '' : ' disabled') + '>兑换一节电影</button>' +
     '</div>';
 document.getElementById('stats').innerHTML +=
@@ -3079,10 +3080,36 @@ document.getElementById('stats').innerHTML +=
   });
 }
 
+/* ===== 班级基金归零：看完电影后重新开一轮 =====
+   把「累计捐入 / 已兑换消耗 / 人工调整」三本账一起清零，
+   从 0/CLASS_GOAL 重新开始攒。学生已经捐出去的分不退还，个人积分不受影响。 */
+function zeroClassFund(skipConfirm) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
+  var f = DB.classFund || 0, sp = DB.classSpent || 0, ad = DB.classAdjust || 0;
+  if (!f && !sp && !ad) { toast('班级基金本来就是 0，不用归零'); return; }
+  if (!skipConfirm) {
+    if (!confirm('把班级基金整本账归零？\n\n' +
+      '· 累计捐入　　' + f + ' 分\n' +
+      '· 已兑换消耗　' + sp + ' 分\n' +
+      '· 人工调整　　' + ad + ' 分\n' +
+      '· 当前结余　　' + classPoints() + ' 分\n\n' +
+      '归零后从 0 / ' + CLASS_GOAL + ' 重新开始攒。\n' +
+      '注意：学生已经捐出去的分不会退回来，个人积分不受影响。')) return;
+  }
+  DB.classFund = 0;
+  DB.classSpent = 0;
+  DB.classAdjust = 0;
+  save();
+  renderOverview();
+  if (typeof renderRecords === 'function') renderRecords();
+  toast('班级基金已归零，从现在开始攒下一轮');
+}
+
 document.getElementById('stats').addEventListener('click', function (e) {
   var tid = e.target.id;
   if (tid === 'btnDonate') { openDonate(); return; }
   if (tid === 'btnAdjClass') { openClassAdjust(); return; }
+  if (tid === 'btnZeroFund') { zeroClassFund(); return; }
   if (tid !== 'btnMovie') return;
   var cp = classPoints();
   if (cp < CLASS_GOAL) { toast('还差 ' + (CLASS_GOAL - cp) + ' 分'); return; }
@@ -3091,7 +3118,20 @@ document.getElementById('stats').addEventListener('click', function (e) {
   DB.records.unshift({ t: nowStr(), sid: -1, name: '全班', label: '🎬 兑换一节电影（一节课）', v: -CLASS_GOAL });
   save();
   renderOverview();
-  toast('已兑换！记得约时间，别拖成空头支票');
+  /* 兑换完还有结余，问一句要不要直接归零，省得下次再点一次 */
+  var left = classPoints();
+  if (left > 0) {
+    setTimeout(function () {
+      if (confirm('已兑换！基金还剩 ' + left + ' 分结余。\n\n' +
+        '要不要把整本账一起归零，从现在开始攒下一轮？\n（点取消就保留这 ' + left + ' 分）')) {
+        zeroClassFund(true);
+      } else {
+        toast('已兑换！记得约时间，别拖成空头支票');
+      }
+    }, 150);
+  } else {
+    toast('已兑换！记得约时间，别拖成空头支票');
+  }
 });
 
 document.getElementById('cityGrid').addEventListener('click', function (e) {
