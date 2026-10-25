@@ -450,7 +450,7 @@ button,input,select{font-family:inherit;}
       <a data-v="groups"><span class="ic">🧩</span><span>分组管理</span></a>
       <a data-v="buildings"><span class="ic">🏗</span><span>建筑图鉴</span></a>
     </nav>
-    <div class="foot">v14 · 按小组选人<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v15 · 每类12组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -602,7 +602,7 @@ var SAVE_KEY = 'bzr_town_v6';
 var NAMES = "陈天宇,金紫琪,曾景瑞,曾雨萍,杨国鑫,张睿福,刘炜,古欣怡,卢梓萱,邓易,廖愉晴,廖小雨,曾惠怡,林嘉铖,缪華葳,梁雨菲,张妍珊,杨圣,韦秀美,谢幸宜,邹婉茹,刘璇,甘家吉,杨惠婷,莫晓楠,何文超,梁耀文,王梓宇,王梓瑶,祖力皮喀尔·阿不来提,王博雅,莫鸿懿,陈鹏晖,黄月梅,毛翔宇,尹骏宇,张嘉毅,邓语芯,朱文斌,夏子斌,黄广韬,麻嘉成,谭文俊,王锦源,甘米棋,邹嘉富,李梓悦,陈智伟,温帅楷,谢谦宇,陈欣楠,谢桂梅,李志涛,游润笙,谢子萱".split(",");
 /* ===== 五类小组（互相独立，各自编号）=====
    每类最多 GROUP_MAX 个组，组名可自定义 */
-var GROUP_MAX = 11;
+var GROUP_MAX = 12;
 var GROUP_TYPES = [
   { id: 'officer', name: '班干小组', short: '班干', icon: '👔' },
   { id: 'night',   name: '晚修小组', short: '晚修', icon: '🌙' },
@@ -880,13 +880,13 @@ function groupUsedCount(type) {
   return mx + 1;
 }
 
-/* 新生初始分组：五类都按 10 组平均，宿舍按 12 人一间 */
+/* 新生初始分组：五类都按 GROUP_MAX 组平均，宿舍按 12 人一间 */
 function initGroups(i, total, dormIdx) {
   return {
-    officer: defaultGroup(i, total, 10),
-    night:   defaultGroup(i, total, 10),
-    class:   defaultGroup(i, total, 10),
-    duty:    defaultGroup(i, total, 10),
+    officer: defaultGroup(i, total, GROUP_MAX),
+    night:   defaultGroup(i, total, GROUP_MAX),
+    class:   defaultGroup(i, total, GROUP_MAX),
+    duty:    defaultGroup(i, total, GROUP_MAX),
     dorm:    (dormIdx !== undefined) ? dormIdx : Math.floor(i / DORM_SIZE)
   };
 }
@@ -942,11 +942,11 @@ function load() {
        迁移策略：沿用旧值，不丢用户已经调好的分组：
          · 课堂/值日/晚修/班干 → 继承旧的 s.group
          · 宿舍 → 继承旧的 s.dorm
-       （旧 group 最大 9，GROUP_MAX=11，装得下） */
+       （旧 group 最大 9，GROUP_MAX=12，装得下） */
     d.students.forEach(function (s, i) {
       if (!s.groups || typeof s.groups !== 'object') {
         var oldG = parseInt(s.group, 10);
-        if (isNaN(oldG) || oldG < 0) oldG = defaultGroup(i, d.students.length, 10);
+        if (isNaN(oldG) || oldG < 0) oldG = defaultGroup(i, d.students.length, GROUP_MAX);
         var oldD = parseInt(s.dorm, 10);
         if (isNaN(oldD) || oldD < 0) oldD = Math.floor(i / DORM_SIZE);
         s.groups = {
@@ -4381,10 +4381,14 @@ function renderGroups() {
   /* 一键平均分组 */
   var btn = document.getElementById('btnGAvg');
   if (btn) btn.addEventListener('click', function () {
-    var cnt = parseInt(document.getElementById('gCount').value, 10) || used || 10;
+    var cnt = parseInt(document.getElementById('gCount').value, 10) || used || GROUP_MAX;
     var n = DB.students.length;
+    var base = Math.floor(n / cnt), extra = n % cnt;
+    var splitText = extra > 0
+      ? ('前 ' + extra + ' 组各 ' + (base + 1) + ' 人，其余 ' + (cnt - extra) + ' 组各 ' + base + ' 人。')
+      : ('每组各 ' + base + ' 人。');
     if (!confirm('把 ' + n + ' 人平均分成 ' + cnt + ' 个' + gtDef(groupTab).name + '？\n\n' +
-      '前 ' + (n % cnt) + ' 组各 ' + (Math.floor(n / cnt) + 1) + ' 人，其余各 ' + Math.floor(n / cnt) + ' 人。\n' +
+      splitText + '\n' +
       '注意：只影响「' + gtDef(groupTab).name + '」，其他四类不动。')) return;
     DB.students.forEach(function (s, i) {
       setStuGroup(s, groupTab, defaultGroup(i, n, cnt));
