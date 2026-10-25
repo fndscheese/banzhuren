@@ -450,7 +450,7 @@ button,input,select{font-family:inherit;}
       <a data-v="groups"><span class="ic">🧩</span><span>分组管理</span></a>
       <a data-v="buildings"><span class="ic">🏗</span><span>建筑图鉴</span></a>
     </nav>
-    <div class="foot">v18 · 宿舍与值日细则<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v19 · 积分初始化<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -556,6 +556,7 @@ button,input,select{font-family:inherit;}
         <h2>学生管理</h2>
         <div class="sub">改小组、改名、加人</div>
         <div class="sp"></div>
+        <button class="btn ghost sm" id="btnResetScore">积分初始化</button>
         <button class="btn sm" id="btnAddStu">+ 添加学生</button>
       </div>
       <div class="scroll">
@@ -936,7 +937,7 @@ function newDB() {
     });
   }
   return {
-    v: 13, students: arr, records: [],
+    v: 19, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
@@ -999,6 +1000,13 @@ function load() {
       window.__classLockApplied = applyClassGroupLock(d.students);
       window.__dataUpgraded = true;   /* 让启动流程把新版本立刻存回去 */
     }
+    /* ===== v19：学生积分恢复初始化（老师 2026-10-26 要求）===== */
+    if ((d.v || 6) < 19) {
+      d.v = 19;
+      resetScoresIn(d);
+      window.__scoresReset = true;
+      window.__dataUpgraded = true;
+    }
     return d;
   } catch (e) { return null; }
 }
@@ -1006,6 +1014,22 @@ function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(DB)); } catch (e) {}
   /* 配了云端就自动推（2.5 秒防抖，避免连续操作狂发请求） */
   if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+}
+
+/* =====================================================================
+   积分初始化
+   只清学生积分和流水：小镇建筑、宠物、五类分组、班级基金都不动
+   ===================================================================== */
+function resetScoresIn(d) {
+  if (!d || !d.students) return;
+  d.students.forEach(function (s) {
+    s.points = START_POINTS;
+    s.spent = 0;
+    s.penalty = 0;
+    s.todayAdd = 0;      /* 今日已加也归零，否则今天还卡在 12 分上限里 */
+    s.todayDate = '';
+  });
+  d.records = [];
 }
 
 function balOf(s) { return s.points - s.spent - (s.penalty || 0); }
@@ -4074,6 +4098,25 @@ document.getElementById('btnClearRec').addEventListener('click', function () {
   toast('记录已清空');
 });
 
+/* 积分初始化：只清积分和流水，小镇 / 宠物 / 分组 / 班级基金都不动 */
+var btnResetScore = document.getElementById('btnResetScore');
+if (btnResetScore) btnResetScore.addEventListener('click', function () {
+  var n = DB.students.length;
+  if (!confirm('把全班 ' + n + ' 名学生的积分恢复初始化？\n\n' +
+    '· 每人积分回到开镇礼 ' + START_POINTS + ' 分\n' +
+    '· 已消费、扣罚、今日已加 全部归零\n' +
+    '· 积分流水记录清空\n\n' +
+    '小镇建筑、宠物、五类分组、班级基金都保留不动。\n此操作不能撤回，建议先「导出备份」。')) return;
+  if (!confirm('再确认一次：真的要现在归零吗？')) return;
+  resetScoresIn(DB);
+  save();
+  renderRecords();
+  renderOverview();
+  if (typeof renderRank === 'function') renderRank();
+  if (typeof renderScore === 'function') renderScore();
+  toast('积分已恢复初始化（每人 ' + START_POINTS + ' 分）');
+});
+
 /* =====================================================================
    捐分换电影时间（全班筹 1100 分）
    ===================================================================== */
@@ -4758,6 +4801,14 @@ if (window.__classLockApplied) {
   }, 900);
 }
 
+/* 积分刚被恢复初始化，提示一次 */
+if (window.__scoresReset) {
+  window.__scoresReset = false;
+  setTimeout(function () {
+    toast('学生积分已恢复初始化（每人 ' + START_POINTS + ' 分）');
+  }, 1300);
+}
+
 /* 首次进入时若视图尺寸为 0，切到城市时再 resize */
 window.addEventListener('load', function () { resize(); });
 
@@ -4892,6 +4943,11 @@ function cloudPull() {
         if ((DB.v || 6) < 13) {
           DB.v = 13;
           applyClassGroupLock(DB.students);
+        }
+        /* 云端存档若是初始化之前的，同样把积分归零 */
+        if ((DB.v || 6) < 19) {
+          DB.v = 19;
+          resetScoresIn(DB);
         }
         save();
         setCloudTag('☁ 已下载', 'var(--brand-d)');
