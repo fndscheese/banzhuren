@@ -57,6 +57,17 @@ button,input,select{font-family:inherit;}
   padding:12px 16px;font-size:11px;color:#5E7B74;border-top:1px solid rgba(255,255,255,.07);
 }
 #side .foot b{color:#8FB0A9;font-weight:600;}
+/* ===== 只读锁（老师登录） ===== */
+#side .lockBox{padding:10px 14px 2px;}
+#side .lockBtn{
+  width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);
+  color:#C8DEDA;border-radius:9px;padding:9px 10px;font-size:12.5px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:.18s;
+}
+#side .lockBtn:hover{background:rgba(255,255,255,.13);color:#fff;}
+#side .lockBtn.on{background:linear-gradient(135deg,#43D8BE,#1E9C89);border-color:transparent;color:#fff;}
+#side .lockTip{font-size:10.5px;color:#6E8B84;text-align:center;margin-top:6px;line-height:1.5;}
+#side .lockTip.on{color:#7FE3D0;font-weight:600;}
 
 /* ============ 主区 ============ */
 #main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
@@ -450,7 +461,11 @@ button,input,select{font-family:inherit;}
       <a data-v="groups"><span class="ic">🧩</span><span>分组管理</span></a>
       <a data-v="buildings"><span class="ic">🏗</span><span>建筑图鉴</span></a>
     </nav>
-    <div class="foot">v20 · 班干部日常+1<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="lockBox">
+      <button class="lockBtn" id="btnLock">🔒 老师登录</button>
+      <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
+    </div>
+    <div class="foot">v21 · 只读锁<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -2659,6 +2674,7 @@ function tryExpand(stu) {
 
 /* 加一栋建筑（不改积分，纯落地） */
 function placeItem(stu, type, gx, gz) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var def = bdef(type);
   if (!def) return false;
   if (!canPlace(gx, gz, def.w, def.h)) return false;
@@ -2668,6 +2684,7 @@ function placeItem(stu, type, gx, gz) {
 
 /* 卖出/拆掉 */
 function removeItem(stu, idx) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   stu.items.splice(idx, 1);
 }
 
@@ -2675,6 +2692,7 @@ function removeItem(stu, idx) {
    放置模式
    ===================================================================== */
 function enterPlaceMode(type) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var def = bdef(type);
   if (!def) return;
   if (!currentStu) return;
@@ -3274,6 +3292,7 @@ function renderShop() {
 
 /* 商店点击 */
 document.getElementById('shopItems').addEventListener('click', function (e) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var el = e.target.closest ? e.target.closest('.it') : null;
   if (!el) return;
   var bid = el.getAttribute('data-b');
@@ -3355,6 +3374,7 @@ function openAdopt(isSecond, price) {
 }
 
 function doAdopt(type, isSecond, price) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var stu = currentStu;
   if (balOf(stu) < price) { toast('积分不够了'); return; }
   stu.spent += price;
@@ -3374,6 +3394,7 @@ function doAdopt(type, isSecond, price) {
 }
 
 function feedPet(stu, pet) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   if (!pet) return;
   var today = todayKey();
   if (pet.feedDate !== today) { pet.feedDate = today; pet.feedToday = 0; }
@@ -3399,6 +3420,7 @@ function feedPet(stu, pet) {
 }
 
 function renamePet(stu, pet) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   if (!pet) return;
   if (balOf(stu) < 5) { toast('改名要 5 分积分'); return; }
   var nm = prompt('给「' + pet.name + '」起个新名字（最多 6 个字）：', pet.name);
@@ -3542,6 +3564,7 @@ function showBuildCard(idx) {
 }
 
 function upgradeHouse(idx) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var stu = currentStu;
   if (!stu) return;
   var it = stu.items[idx];
@@ -3757,6 +3780,7 @@ function manualPaneHtml() {
 
 /* ---------- 点一下规则，就给选中的人记分 ---------- */
 function applyRule(rid) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var rule = null;
   RULES.forEach(function (r) { if (r.id === rid) rule = r; });
   if (!rule) return;
@@ -3840,6 +3864,7 @@ function applyRule(rid) {
 }
 
 function undoLastScore() {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   if (!undoBuf || !undoBuf.changes.length) { toast('没有可撤销的记录'); return; }
   undoBuf.changes.forEach(function (c) {
     var s = DB.students[c.id];
@@ -3952,6 +3977,7 @@ function bindScoreEvents2() {
 
   /* 全班一键建设 */
   document.getElementById('btnAutoBuild').addEventListener('click', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
     var built = 0, grew = 0;
     DB.students.forEach(function (s) {
       setMapSize(s.size);
@@ -4007,6 +4033,7 @@ function fillManual(btn) {
 }
 
 function doSaveScore() {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var wrap = document.getElementById('scoreWrap');
   var addSum = 0, subSum = 0, addN = 0, subN = 0, oweN = 0;
   wrap.querySelectorAll('.sc-row').forEach(function (row) {
@@ -4071,6 +4098,7 @@ function renderRecords() {
 /* 退回一笔捐款：钱从班级基金退回学生余额，并删掉这条流水
    用途：凑够了一节电影没看成 / 捐错人了 / 学生反悔想先买建筑 */
 function refundDonate(idx) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var r = DB.records[idx];
   if (!r || !r.donated) return;
   var stu = DB.students[r.sid];
@@ -4092,6 +4120,7 @@ function refundDonate(idx) {
 }
 
 document.getElementById('btnClearRec').addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   if (!confirm('清空全部积分记录？（学生积分和建筑不受影响）')) return;
   DB.records = [];
   save();
@@ -4102,6 +4131,7 @@ document.getElementById('btnClearRec').addEventListener('click', function () {
 /* 积分初始化：只清积分和流水，小镇 / 宠物 / 分组 / 班级基金都不动 */
 var btnResetScore = document.getElementById('btnResetScore');
 if (btnResetScore) btnResetScore.addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var n = DB.students.length;
   if (!confirm('把全班 ' + n + ' 名学生的积分恢复初始化？\n\n' +
     '· 每人积分回到开镇礼 ' + START_POINTS + ' 分\n' +
@@ -4250,6 +4280,7 @@ function refreshDonateSum(need) {
 }
 
 function doDonate(need) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var wrap = document.querySelector('#mask .mb');
   var tot = 0, rows = [];
   wrap.querySelectorAll('.dg').forEach(function (inp) {
@@ -4338,6 +4369,7 @@ function openClassAdjust() {
 }
 
 function quickAdj(v, why) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var a = document.getElementById('adjVal');
   var b = document.getElementById('adjWhy');
   if (a) a.value = v;
@@ -4345,6 +4377,7 @@ function quickAdj(v, why) {
 }
 
 function doClassAdjust() {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var inp = document.getElementById('adjVal');
   var v = parseInt(inp.value, 10);
   if (!v || isNaN(v)) { toast('填一个分数，负数表示扣'); return; }
@@ -4451,6 +4484,7 @@ function renderGroups() {
   /* 改组名 */
   document.querySelectorAll('#groupsBody input[data-gn]').forEach(function (inp) {
     inp.addEventListener('change', function () {
+      if (typeof needUnlock === 'function' && !needUnlock()) return;
       setGroupName(groupTab, parseInt(inp.getAttribute('data-gn'), 10), inp.value);
       save();
       var idx = parseInt(inp.getAttribute('data-gn'), 10);
@@ -4461,6 +4495,7 @@ function renderGroups() {
   /* 一键平均分组 */
   var btn = document.getElementById('btnGAvg');
   if (btn) btn.addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
     var cnt = parseInt(document.getElementById('gCount').value, 10) || used || GROUP_MAX;
     var n = DB.students.length;
     var base = Math.floor(n / cnt), extra = n % cnt;
@@ -4552,6 +4587,7 @@ function openGroupImport() {
   );
 
   document.getElementById('btnImpGo').addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
     var type = document.getElementById('impType').value;
     var rows = parseGroupText(document.getElementById('impTxt').value);
     if (!rows.length) {
@@ -4630,6 +4666,7 @@ function renderManage() {
   document.getElementById('manageBody').innerHTML = html;
 
   document.getElementById('btnSaveStu').addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
     document.querySelectorAll('#manageBody input[data-nm]').forEach(function (inp) {
       var s = DB.students[parseInt(inp.getAttribute('data-nm'), 10)];
       var v = inp.value.trim();
@@ -4672,6 +4709,7 @@ function openStuGroups(sid) {
   );
 
   document.getElementById('btnStuGroupSave').addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
     document.querySelectorAll('#mask select[data-gt]').forEach(function (sel) {
       setStuGroup(s, sel.getAttribute('data-gt'), parseInt(sel.value, 10));
     });
@@ -4684,6 +4722,7 @@ function openStuGroups(sid) {
 }
 
 document.getElementById('btnAddStu').addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var nm = prompt('新学生的姓名：');
   if (!nm || !nm.trim()) return;
   var id = DB.students.length;
@@ -4743,6 +4782,7 @@ document.getElementById('btnBackup').addEventListener('click', function () {
 });
 
 document.getElementById('btnRestore').addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
   var inp = document.createElement('input');
   inp.type = 'file'; inp.accept = '.json';
   inp.onchange = function () {
@@ -4766,6 +4806,149 @@ document.getElementById('btnRestore').addEventListener('click', function () {
 });
 
 /* =====================================================================
+   只读锁
+   ---------------------------------------------------------------------
+   默认「浏览模式」：谁打开都能看小镇、看排行、看记录，
+   但记分 / 建房 / 买宠物 / 改分组 / 改设置 都要先输老师密码。
+
+   · 密码不存明文，存的是混淆后的哈希
+   · 默认密码由 LOCK_HASH_DEFAULT 决定；老师可自己改（改完只在这台电脑生效）
+   · 勾了「7 天内不用再输」才会记住，默认每次打开都是锁的
+   ===================================================================== */
+var UNLOCKED = false;
+var LOCK_UNTIL_KEY = 'bzr_town_lock_until';    /* 记住到什么时候 */
+var LOCK_HASH_KEY  = 'bzr_town_lock_hash';     /* 老师改过的密码哈希 */
+var LOCK_SALT      = 'bzr711#';
+var LOCK_HASH_DEFAULT = 'e2fe7d38';            /* 默认密码 000531 */
+
+function pwdHash(s) {
+  var h = 5381, i;
+  for (i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return ('0000000' + h.toString(16)).slice(-8);
+}
+function lockHashNow() {
+  var h = '';
+  try { h = localStorage.getItem(LOCK_HASH_KEY) || ''; } catch (e) {}
+  return h || LOCK_HASH_DEFAULT;
+}
+/* 所有"会改数据"的操作，开头都要过这一关 */
+function needUnlock() {
+  if (UNLOCKED) return true;
+  toast('这是浏览模式，只能看不能改。点左下角「🔒 老师登录」输密码');
+  return false;
+}
+function refreshLockUI() {
+  var b = document.getElementById('btnLock');
+  var tip = document.getElementById('lockTip');
+  if (!b) return;
+  b.textContent = UNLOCKED ? '🔓 已登录（点击管理）' : '🔒 老师登录';
+  b.className = 'lockBtn' + (UNLOCKED ? ' on' : '');
+  if (tip) {
+    tip.textContent = UNLOCKED ? '可以记分、建房、改设置了' : '浏览模式：只能看，不能记分';
+    tip.className = 'lockTip' + (UNLOCKED ? ' on' : '');
+  }
+}
+function lockBoot() {
+  try {
+    var until = parseInt(localStorage.getItem(LOCK_UNTIL_KEY) || '0', 10);
+    if (until && Date.now() < until) UNLOCKED = true;
+    else if (until) localStorage.removeItem(LOCK_UNTIL_KEY);
+  } catch (e) {}
+  refreshLockUI();
+}
+var LOCK_INPUT_STYLE = 'width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;' +
+  'font-size:13.5px;font-family:inherit;margin-top:10px;box-sizing:border-box';
+
+function openLock() {
+  /* ------- 已登录：退出 / 改密码 ------- */
+  if (UNLOCKED) {
+    openModal(
+      '<div class="mh"><h3>老师已登录</h3><button class="x" onclick="closeModal()">×</button></div>' +
+      '<div class="mb">' +
+        '<div class="dNote">现在可以记分、建房、改设置。<br>' +
+        '如果这台电脑是教室公用的，用完记得点「退出登录」，不然下一节课学生还能改。</div>' +
+        '<div id="lockChangeBox" style="display:none">' +
+          '<input id="lockNew1" type="password" placeholder="新密码（至少 4 位）" style="' + LOCK_INPUT_STYLE + '">' +
+          '<input id="lockNew2" type="password" placeholder="再输一次" style="' + LOCK_INPUT_STYLE + '">' +
+        '</div>' +
+        '<div id="lockMsg2" style="font-size:12px;color:#D9534F;margin-top:8px;min-height:16px"></div>' +
+      '</div>' +
+      '<div class="mf">' +
+        '<button class="btn ghost" id="btnLockChange">修改密码</button>' +
+        '<button class="btn" id="btnLockOut">退出登录</button>' +
+      '</div>'
+    );
+    document.getElementById('btnLockOut').addEventListener('click', function () {
+      UNLOCKED = false;
+      try { localStorage.removeItem(LOCK_UNTIL_KEY); } catch (e) {}
+      closeModal();
+      refreshLockUI();
+      toast('已退出，回到浏览模式');
+    });
+    document.getElementById('btnLockChange').addEventListener('click', function () {
+      var box = document.getElementById('lockChangeBox');
+      var msg = document.getElementById('lockMsg2');
+      if (box.style.display === 'none') {
+        box.style.display = 'block';
+        this.textContent = '保存新密码';
+        setTimeout(function () { var el = document.getElementById('lockNew1'); if (el) el.focus(); }, 60);
+        return;
+      }
+      var a = (document.getElementById('lockNew1').value || '').trim();
+      var b2 = (document.getElementById('lockNew2').value || '').trim();
+      if (a.length < 4) { msg.textContent = '新密码至少 4 位'; return; }
+      if (a !== b2) { msg.textContent = '两次输入不一样'; return; }
+      try { localStorage.setItem(LOCK_HASH_KEY, pwdHash(LOCK_SALT + a)); } catch (e) {}
+      closeModal();
+      toast('密码已改（只在这台电脑生效）');
+    });
+    return;
+  }
+
+  /* ------- 未登录：输密码 ------- */
+  openModal(
+    '<div class="mh"><h3>老师登录</h3><button class="x" onclick="closeModal()">×</button></div>' +
+    '<div class="mb">' +
+      '<div class="dNote">现在是<b>浏览模式</b>：学生能看小镇、看排行榜，但改不了分数。<br>' +
+      '输入老师密码后，才能记分、建房、改分组。</div>' +
+      '<input id="lockPwd" type="password" placeholder="请输入密码" style="' + LOCK_INPUT_STYLE + '">' +
+      '<label style="display:flex;align-items:center;gap:7px;margin-top:12px;font-size:12.5px;' +
+        'color:var(--ink2);cursor:pointer">' +
+        '<input type="checkbox" id="lockRemember"> 这台电脑 7 天内不用再输' +
+      '</label>' +
+      '<div id="lockMsg" style="font-size:12px;color:#D9534F;margin-top:8px;min-height:16px"></div>' +
+    '</div>' +
+    '<div class="mf">' +
+      '<button class="btn ghost" onclick="closeModal()">取消</button>' +
+      '<button class="btn" id="btnLockGo">解锁</button>' +
+    '</div>'
+  );
+  var inp = document.getElementById('lockPwd');
+  var go = function () {
+    var v = (inp.value || '').trim();
+    var msg = document.getElementById('lockMsg');
+    if (!v) { msg.textContent = '先输密码'; return; }
+    if (pwdHash(LOCK_SALT + v) !== lockHashNow()) {
+      msg.textContent = '密码不对，再试一次';
+      inp.value = '';
+      inp.focus();
+      return;
+    }
+    UNLOCKED = true;
+    var rb = document.getElementById('lockRemember');
+    if (rb && rb.checked) {
+      try { localStorage.setItem(LOCK_UNTIL_KEY, String(Date.now() + 7 * 24 * 3600 * 1000)); } catch (e) {}
+    }
+    closeModal();
+    refreshLockUI();
+    toast('已解锁，可以记分了');
+  };
+  document.getElementById('btnLockGo').addEventListener('click', go);
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+  setTimeout(function () { if (inp) inp.focus(); }, 60);
+}
+
+/* =====================================================================
    启动
    ===================================================================== */
 var __ld = load();
@@ -4785,6 +4968,13 @@ makeHighlight();
 renderShopCats();
 renderOverview();
 bindScoreEvents2();
+
+/* ===== 只读锁：默认浏览模式，老师点左下角输密码才解锁 ===== */
+lockBoot();
+(function () {
+  var b = document.getElementById('btnLock');
+  if (b) b.addEventListener('click', openLock);
+})();
 
 /* 旧数据的分组被自动校正过，提示一次 */
 if (window.__groupFixed) {
@@ -5045,6 +5235,7 @@ function bindCloudModal() {
   };
 
   on('btnCloudSave', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
     var b = gv('cbBucket'), r = gv('cbRegion'), sid = gv('cbSid'), sk = gv('cbSkey');
     if (!b || !r) { toast('请填存储桶名称和地域'); return; }
     if (!sid || !sk) { toast('请填 SecretId 和 SecretKey'); return; }
@@ -5056,8 +5247,12 @@ function bindCloudModal() {
     openCloud();
   });
 
-  on('btnCloudUp', function () { cloudPush(true); });
-  on('btnCloudDown', function () { cloudPull(); });
+  on('btnCloudUp', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    cloudPush(true); });
+  on('btnCloudDown', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    cloudPull(); });
 
   on('btnCloudCopy', function () {
     loadCloudConf();
