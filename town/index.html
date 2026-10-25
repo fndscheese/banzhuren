@@ -465,7 +465,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v21 · 只读锁<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v22 · 小镇清空<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -572,6 +572,7 @@ button,input,select{font-family:inherit;}
         <div class="sub">改小组、改名、加人</div>
         <div class="sp"></div>
         <button class="btn ghost sm" id="btnResetScore">积分初始化</button>
+        <button class="btn ghost sm" id="btnResetTown">小镇清空</button>
         <button class="btn sm" id="btnAddStu">+ 添加学生</button>
       </div>
       <div class="scroll">
@@ -953,7 +954,7 @@ function newDB() {
     });
   }
   return {
-    v: 19, students: arr, records: [],
+    v: 22, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
@@ -1023,6 +1024,13 @@ function load() {
       window.__scoresReset = true;
       window.__dataUpgraded = true;
     }
+    /* ===== v22：小镇推倒重来（清建筑 + 收回宠物 + 地块缩回最小）===== */
+    if ((d.v || 6) < 22) {
+      d.v = 22;
+      resetTownIn(d);
+      window.__townReset = true;
+      window.__dataUpgraded = true;
+    }
     return d;
   } catch (e) { return null; }
 }
@@ -1046,6 +1054,20 @@ function resetScoresIn(d) {
     s.todayDate = '';
   });
   d.records = [];
+}
+
+/* =====================================================================
+   小镇推倒重来
+   清空建筑、收回宠物、地块缩回最小；积分 / 分组 / 班级基金都不动
+   ===================================================================== */
+function resetTownIn(d) {
+  if (!d || !d.students) return;
+  d.students.forEach(function (s) {
+    s.items = [];
+    s.pet = null;
+    s.pet2 = null;
+    s.size = MIN_SIZE;
+  });
 }
 
 function balOf(s) { return s.points - s.spent - (s.penalty || 0); }
@@ -4148,6 +4170,35 @@ if (btnResetScore) btnResetScore.addEventListener('click', function () {
   toast('积分已恢复初始化（每人 ' + START_POINTS + ' 分）');
 });
 
+/* 小镇清空：拆光建筑、收回宠物、地块缩回最小，积分和分组不动 */
+var btnResetTown = document.getElementById('btnResetTown');
+if (btnResetTown) btnResetTown.addEventListener('click', function () {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
+  var n = DB.students.length;
+  var cnt = 0;
+  DB.students.forEach(function (s) { cnt += (s.items || []).length; });
+  if (!confirm('把全班 ' + n + ' 座小镇推倒重来？\n\n' +
+    '· 现在一共 ' + cnt + ' 处建筑（房子、装饰、教育建筑），全部拆掉\n' +
+    '· 所有宠物收回（要重新认养）\n' +
+    '· 地块缩回最小的 12×12\n\n' +
+    '积分、五类分组、班级基金都不动。\n此操作不能撤回，建议先「导出备份」。')) return;
+  if (!confirm('再确认一次：真的要把 ' + cnt + ' 处建筑全拆了吗？')) return;
+  resetTownIn(DB);
+  save();
+  renderOverview();
+  if (typeof renderScore === 'function') renderScore();
+  if (typeof renderRank === 'function') renderRank();
+  var cityOn = document.getElementById('view-city').classList.contains('on');
+  if (cityOn && currentStu) {
+    setMapSize(currentStu.size);
+    buildTown(currentStu);
+    rebuildMovers();
+    resize();
+    renderShop();
+  }
+  toast('全部小镇已推倒重来（' + cnt + ' 处建筑已拆）');
+});
+
 /* =====================================================================
    捐分换电影时间（全班筹 1100 分）
    ===================================================================== */
@@ -5000,6 +5051,14 @@ if (window.__scoresReset) {
   }, 1300);
 }
 
+/* 小镇刚被推倒重来，提示一次 */
+if (window.__townReset) {
+  window.__townReset = false;
+  setTimeout(function () {
+    toast('全部小镇已推倒重来：建筑、宠物都清空了，地块缩回 12×12');
+  }, 1700);
+}
+
 /* 首次进入时若视图尺寸为 0，切到城市时再 resize */
 window.addEventListener('load', function () { resize(); });
 
@@ -5139,6 +5198,11 @@ function cloudPull() {
         if ((DB.v || 6) < 19) {
           DB.v = 19;
           resetScoresIn(DB);
+        }
+        /* 云端存档若是清空之前的，同样推倒重来 */
+        if ((DB.v || 6) < 22) {
+          DB.v = 22;
+          resetTownIn(DB);
         }
         save();
         setCloudTag('☁ 已下载', 'var(--brand-d)');
