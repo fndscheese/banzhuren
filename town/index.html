@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v30 · 晚修分组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v32 · 自己加组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -651,8 +651,9 @@ function applyClassGroupLock(stuArr) {
    第 1 组 班长/副班长　第 2 组 班委（学委/纪委/劳委）
    第 3 组 各科课代表　第 4 组 班干委员
    第 5 组 课堂小组长（预留，暂空）
-   第 6 组 晚修值日班长（预留，暂空）
-   第 7 组 其他同学（名单里没有的都在这里）
+   第 6 组 晚修值日班长（6 位晚修小组长）
+   第 7 组 晚修班长
+   第 8 组 其他同学（名单里没有的都在这里）
    一个人身兼多职就同时挂在多个组（v24 起支持） */
 var OFFICER_GROUPS = {
   2: [1, 2, 3],   /* 曾景瑞 */
@@ -674,15 +675,29 @@ var OFFICER_GROUPS = {
   50: [2],   /* 陈欣楠 */
   54: [1, 2],   /* 谢子萱 */
 };
+/* 除了固定名单，再额外挂到某个班干组的（晚修班长 → 第 7 组，索引 6） */
+var OFFICER_EXTRA = {
+  4: [6],    /* 杨国鑫 */
+  8: [6],    /* 卢梓萱 */
+  30: [6],   /* 王博雅 */
+  50: [6]    /* 陈欣楠 */
+};
+
 var OFFICER_NAMES = ['班长/副班长', '班委', '课代表', '班干委员',
-                       '课堂小组长', '晚修值日班长', '其他同学'];
+                       '课堂小组长', '晚修值日班长', '晚修班长', '其他同学'];
 
 function applyOfficerLock(d) {
   if (!d || !d.students || d.students.length !== NAMES.length) return false;
   d.students.forEach(function (s, i) {
     if (!s.groups) s.groups = {};
     var g = OFFICER_GROUPS[i];
-    s.groups['officer'] = g ? g.slice() : [6];
+    var base = g ? g.slice() : [7];
+    var ex = (typeof OFFICER_EXTRA !== 'undefined') ? OFFICER_EXTRA[i] : null;
+    if (ex) {
+      ex.forEach(function (x) { if (base.indexOf(x) < 0) base.push(x); });
+      base.sort(function (a, b) { return a - b; });
+    }
+    s.groups['officer'] = base;
   });
   if (!d.groupNames) d.groupNames = {};
   d.groupNames['officer'] = OFFICER_NAMES.slice();
@@ -749,7 +764,7 @@ var NIGHT_GROUPS = {
   53: 1,   /* 游润笙：第2组 */
   54: 6,   /* 谢子萱：第7组 */
 };
-var NIGHT_LEADERS = [7, 16, 2, 26, 41, 37];   /* 古欣怡、张妍珊、曾景瑞、梁耀文、麻嘉成、邓语芯 */
+var NIGHT_LEADERS = [2, 7, 16, 26, 41, 37];   /* 曾景瑞、古欣怡、张妍珊、梁耀文、麻嘉成、邓语芯 */
 var NIGHT_NAMES = ['第 1 组', '第 2 组', '第 3 组', '第 4 组', '第 5 组', '第 6 组', '不参加晚修'];
 
 function applyNightLock(d) {
@@ -764,7 +779,7 @@ function applyNightLock(d) {
     NIGHT_LEADERS.forEach(function (i) {
       var s = d.students[i];
       if (!s) return;
-      var cur = stuGroups(s, 'officer').filter(function (x) { return x !== 6; });
+      var cur = stuGroups(s, 'officer').filter(function (x) { return x !== 7; });
       if (cur.indexOf(5) < 0) cur.push(5);
       cur.sort(function (a, b) { return a - b; });
       s.groups['officer'] = cur;
@@ -777,7 +792,7 @@ function applyNightLock(d) {
 
 /* ===== 五类小组（互相独立，各自编号）=====
    每类最多 GROUP_MAX 个组，组名可自定义 */
-var GROUP_MAX = 12;
+var GROUP_MAX = 20;
 var GROUP_TYPES = [
   { id: 'officer', name: '班干小组', short: '班干', icon: '👔' },
   { id: 'night',   name: '晚修小组', short: '晚修', icon: '🌙' },
@@ -1106,6 +1121,34 @@ function groupUsedCount(type) {
   return mx + 1;
 }
 
+/* ===== 空组显示控制 =====
+   老师可以自己"加一组"，空组也显示出来；DB.groupShown 记每类至少显示几组 */
+function groupShownCount(type) {
+  var n = 0;
+  if (typeof DB !== 'undefined' && DB && DB.groupShown) n = parseInt(DB.groupShown[type], 10) || 0;
+  return isNaN(n) ? 0 : n;
+}
+function groupShowCount(type) {
+  return Math.max(groupUsedCount(type), groupShownCount(type), 1);
+}
+function addGroupSlot(type) {
+  if (typeof DB === 'undefined' || !DB) return false;
+  if (!DB.groupShown) DB.groupShown = {};
+  var cur = groupShowCount(type);
+  if (cur >= GROUP_MAX) return false;
+  DB.groupShown[type] = cur + 1;
+  return true;
+}
+/* 去掉最后一个空组（里面必须没人） */
+function dropGroupSlot(type) {
+  if (typeof DB === 'undefined' || !DB) return false;
+  var used = groupUsedCount(type);
+  var shown = groupShownCount(type);
+  if (shown <= used) return false;
+  DB.groupShown[type] = shown - 1;
+  return true;
+}
+
 /* 新生初始分组：五类都按 GROUP_MAX 组平均，宿舍按 12 人一间 */
 function initGroups(i, total, dormIdx) {
   return {
@@ -1136,8 +1179,9 @@ function newDB() {
     });
   }
   var d0 = {
-    v: 30, students: arr, records: [],
+    v: 32, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
+    groupShown: {},          /* 每类"至少显示几组"，老师手动加的空组记在这里 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
   applyOfficerLock(d0);
@@ -1200,6 +1244,7 @@ function load() {
       });
     });
     if (!d.groupNames || typeof d.groupNames !== 'object') d.groupNames = {};
+    if (!d.groupShown || typeof d.groupShown !== 'object') d.groupShown = {};
     GROUP_TYPES.forEach(function (t) {
       if (!d.groupNames[t.id]) d.groupNames[t.id] = [];
     });
@@ -1246,6 +1291,19 @@ function load() {
     /* v30：晚修小组按老师给的分组填好（组长同时进班干的「晚修值日班长」组） */
     if ((d.v || 6) < 30) {
       d.v = 30;
+      window.__nightLockApplied = applyNightLock(d);
+      window.__dataUpgraded = true;
+    }
+    /* v31：晚修值日班长补 4 人 + 分组上限放开到 20 组 */
+    if ((d.v || 6) < 31) {
+      d.v = 31;
+      window.__nightLockApplied = applyNightLock(d);
+      window.__dataUpgraded = true;
+    }
+    /* v32：新增「晚修班长」组（杨国鑫、陈欣楠、王博雅、卢梓萱） */
+    if ((d.v || 6) < 32) {
+      d.v = 32;
+      applyOfficerLock(d);
       window.__nightLockApplied = applyNightLock(d);
       window.__dataUpgraded = true;
     }
@@ -4750,6 +4808,8 @@ function renderGroups() {
           '现在用到 <b style="color:var(--brand-d)">' + used + '</b> 个组 · 共 ' + total + ' 人 · ' +
           '每类最多 ' + GROUP_MAX + ' 个组</div></div>' +
       '<div style="flex:1"></div>' +
+      '<button class="btn ghost sm" id="btnGAdd">＋ 加一组</button>' +
+      '<button class="btn ghost sm" id="btnGDel">－ 去掉空组</button>' +
       '<span style="font-size:12px;color:var(--ink2)">分成</span>' +
       '<select id="gCount" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;' +
         'font-size:12.5px;font-family:inherit">';
@@ -4763,7 +4823,7 @@ function renderGroups() {
     '</div>';
 
   var rows = '<div style="background:#fff;border-radius:12px;border:1px solid var(--line);overflow:hidden;box-shadow:var(--sh)">';
-  var showN = Math.max(used, 1);
+  var showN = groupShowCount(groupTab);
   for (var i = 0; i < showN; i++) {
     var mem = membersOf(groupTab, i);
     var names = mem.map(function (s) { return s.name; }).join('、');
@@ -4779,6 +4839,8 @@ function renderGroups() {
 
   var tip = '<div class="dNote" style="margin-top:14px">' +
     '组名留空就显示"第 N 组"。改完名字会自动保存。<br>' +
+    '<b>要加组就点上面的「＋ 加一组」</b>，会多出一个空组（现在最多 ' + GROUP_MAX + ' 组）；' +
+    '空组放人：去「学生管理」点某个学生的「改」，或者用「批量粘贴导入」写「' + showN + '张三，李四」。<br>' +
     '<b>五类小组是互相独立的</b>：同一个学生在晚修小组可能是第 3 组，在值日小组可能是第 7 组，互不影响。' +
     '</div>';
 
@@ -4823,6 +4885,32 @@ function renderGroups() {
     save();
     renderGroups();
     toast('已把' + gtDef(groupTab).name + '平均分成 ' + cnt + ' 组');
+  });
+
+  /* 加一组 / 去掉最后一个空组 */
+  var btnAdd = document.getElementById('btnGAdd');
+  if (btnAdd) btnAdd.addEventListener('click', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    if (groupShowCount(groupTab) >= GROUP_MAX) {
+      toast('每类最多 ' + GROUP_MAX + ' 个组，已经到顶了');
+      return;
+    }
+    if (!addGroupSlot(groupTab)) { toast('加不了了'); return; }
+    save();
+    renderGroups();
+    toast('已加一个空组：第 ' + groupShowCount(groupTab) + ' 组（点组名可以改名）');
+  });
+  var btnDel = document.getElementById('btnGDel');
+  if (btnDel) btnDel.addEventListener('click', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    var used = groupUsedCount(groupTab);
+    var shown = groupShowCount(groupTab);
+    if (shown <= used) { toast('最后那组里还有人，先把人挪走再删'); return; }
+    if (!confirm('去掉最后一个空组「' + groupName(groupTab, shown - 1) + '」？（里面没有人，去掉不影响学生）')) return;
+    if (!dropGroupSlot(groupTab)) { toast('删不了'); return; }
+    save();
+    renderGroups();
+    toast('已去掉一个空组');
   });
 
   /* 批量粘贴导入 */
@@ -5000,7 +5088,9 @@ function openStuGroups(sid) {
   GROUP_TYPES.forEach(function (t) {
     var cur = stuGroups(s, t.id);
     var btns = '';
-    for (var g = 0; g < GROUP_MAX; g++) {
+    var maxCur = cur.length ? Math.max.apply(null, cur) + 1 : 0;
+    var btnN = Math.min(GROUP_MAX, Math.max(groupShowCount(t.id), maxCur));
+    for (var g = 0; g < btnN; g++) {
       var cnt = membersOf(t.id, g).length;
       var on = cur.indexOf(g) >= 0;
       btns += '<button type="button" class="sgPick' + (on ? ' on' : '') + '"' +
@@ -5354,7 +5444,7 @@ if (window.__officerLockApplied) {
 if (window.__nightLockApplied) {
   window.__nightLockApplied = false;
   setTimeout(function () {
-    toast('晚修小组已填好：6 组（组长同时进了班干的「晚修值日班长」组）');
+    toast('晚修小组已填好：6 组＋不参加晚修（组长同时进了班干的「晚修值日班长」组）');
   }, 1800);
 }
 
@@ -5519,6 +5609,12 @@ function cloudPull() {
         /* 云端存档若是晚修分组之前的，同样套一次 */
         if ((DB.v || 6) < 30) {
           DB.v = 30;
+          applyNightLock(DB);
+        }
+        /* 云端存档若早于晚修班长组，同样重算一次 */
+        if ((DB.v || 6) < 32) {
+          DB.v = 32;
+          applyOfficerLock(DB);
           applyNightLock(DB);
         }
         save();
