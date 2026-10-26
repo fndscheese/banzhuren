@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v28 · 预留两个组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v29 · 班干周评分级<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -777,18 +777,20 @@ var RULES = [
   { id:'w5', cat:'卫生', name:'值日迟到',      v:-1, scope:'self', grp:'duty' },
   { id:'w6', cat:'卫生', name:'值日缺勤',      v:-2, scope:'self', grp:'duty' },
 
-  /* --- 品德（含班干部履职、校级活动与获奖） --- */
+  /* --- 品德（班干部周评四条 + 校级活动与获奖） --- */
   { id:'m1',  cat:'品德', name:'好人好事',      v:2,  scope:'self', grp:'class' },
   { id:'m2',  cat:'品德', name:'帮同学讲题',    v:2,  scope:'self', grp:'class' },
-  { id:'m3',  cat:'品德', name:'班委履职·周',   v:3,  scope:'self', grp:'officer' },
+  { id:'m13', cat:'品德', name:'班长副班长·周', v:5,  scope:'self', grp:'officer' },
+  { id:'m3',  cat:'品德', name:'班委履职·周',   v:4,  scope:'self', grp:'officer' },
+  { id:'m11', cat:'品德', name:'课代表履职·周', v:3,  scope:'self', grp:'officer' },
+  { id:'m14', cat:'品德', name:'课堂小组长·周', v:2,  scope:'self', grp:'officer' },
+  { id:'m12', cat:'品德', name:'班干部失职·周', v:-1, scope:'self', grp:'officer' },
   { id:'m4',  cat:'品德', name:'承担班级事务',  v:3,  scope:'self', grp:'class' },
   { id:'m5',  cat:'品德', name:'校级活动预赛',  v:1,  scope:'self', grp:'class' },
   { id:'m7',  cat:'品德', name:'校级活动表演',  v:3,  scope:'self', grp:'class' },
   { id:'m8',  cat:'品德', name:'校级一等奖',    v:3,  scope:'self', grp:'class' },
   { id:'m9',  cat:'品德', name:'校级二等奖',    v:2,  scope:'self', grp:'class' },
   { id:'m10', cat:'品德', name:'校级三等奖',    v:1,  scope:'self', grp:'class' },
-  { id:'m11', cat:'品德', name:'课代表履职·周', v:2,  scope:'self', grp:'officer' },
-  { id:'m12', cat:'品德', name:'班干部失职·周', v:-1, scope:'self', grp:'officer' },
 
   /* --- 集体 --- */
   { id:'c1', cat:'集体', name:'班级流动红旗',  v:10, scope:'class', grp:'class' },
