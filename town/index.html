@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v26 · 积分细则修订<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v27 · 班长组单列<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -647,38 +647,39 @@ function applyClassGroupLock(stuArr) {
   return true;
 }
 
-/* ===== 班干小组固定名单（老师 2026-10-26 给的）=====
-   第 1 组 班委 / 第 2 组 各科课代表 / 第 3 组 班干委员
+/* ===== 班干小组固定名单（老师 2026-10-26 定的）=====
+   第 1 组 班长/副班长　第 2 组 班委（学委/纪委/劳委）
+   第 3 组 各科课代表　第 4 组 班干委员　第 5 组 其他同学
    一个人身兼多职就同时挂在多个组（v24 起支持）
-   名单里没有的同学统一放第 4 组「其他同学」 */
+   名单里没有的同学统一放最后一组「其他同学」 */
 var OFFICER_GROUPS = {
-  2: [0, 1, 2],   /* 曾景瑞 */
-  4: [1],   /* 杨国鑫 */
-  6: [1],   /* 刘炜 */
-  7: [0, 1],   /* 古欣怡 */
-  8: [1],   /* 卢梓萱 */
-  10: [1],   /* 廖愉晴 */
+  2: [1, 2, 3],   /* 曾景瑞 */
+  4: [2],   /* 杨国鑫 */
+  6: [2],   /* 刘炜 */
+  7: [1, 2],   /* 古欣怡 */
+  8: [2],   /* 卢梓萱 */
+  10: [2],   /* 廖愉晴 */
   11: [0],   /* 廖小雨 */
-  12: [1],   /* 曾惠怡 */
-  15: [0, 2],   /* 梁雨菲 */
-  25: [1],   /* 何文超 */
-  28: [2],   /* 王梓瑶 */
-  30: [1],   /* 王博雅 */
-  34: [2],   /* 毛翔宇 */
-  37: [1],   /* 邓语芯 */
-  41: [1],   /* 麻嘉成 */
-  48: [1, 2],   /* 温帅楷 */
-  50: [1],   /* 陈欣楠 */
-  54: [0, 1],   /* 谢子萱 */
+  12: [2],   /* 曾惠怡 */
+  15: [0, 3],   /* 梁雨菲 */
+  25: [2],   /* 何文超 */
+  28: [3],   /* 王梓瑶 */
+  30: [2],   /* 王博雅 */
+  34: [3],   /* 毛翔宇 */
+  37: [2],   /* 邓语芯 */
+  41: [2],   /* 麻嘉成 */
+  48: [2, 3],   /* 温帅楷 */
+  50: [2],   /* 陈欣楠 */
+  54: [1, 2],   /* 谢子萱 */
 };
-var OFFICER_NAMES = ['班委', '课代表', '班干委员', '其他同学'];
+var OFFICER_NAMES = ['班长/副班长', '班委', '课代表', '班干委员', '其他同学'];
 
 function applyOfficerLock(d) {
   if (!d || !d.students || d.students.length !== NAMES.length) return false;
   d.students.forEach(function (s, i) {
     if (!s.groups) s.groups = {};
     var g = OFFICER_GROUPS[i];
-    s.groups['officer'] = g ? g.slice() : [3];
+    s.groups['officer'] = g ? g.slice() : [4];
   });
   if (!d.groupNames) d.groupNames = {};
   d.groupNames['officer'] = OFFICER_NAMES.slice();
@@ -1044,7 +1045,7 @@ function newDB() {
     });
   }
   var d0 = {
-    v: 25, students: arr, records: [],
+    v: 27, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
@@ -1132,9 +1133,15 @@ function load() {
       window.__townReset = true;
       window.__dataUpgraded = true;
     }
-    /* ===== v25：班干小组按岗位名单填好 ===== */
+    /* ===== v25/v27：班干小组按岗位名单填好 ===== */
     if ((d.v || 6) < 25) {
       d.v = 25;
+      window.__officerLockApplied = applyOfficerLock(d);
+      window.__dataUpgraded = true;
+    }
+    /* v27：班长、副班长单独成组 */
+    if ((d.v || 6) < 27) {
+      d.v = 27;
       window.__officerLockApplied = applyOfficerLock(d);
       window.__dataUpgraded = true;
     }
@@ -5235,7 +5242,7 @@ if (window.__scoresReset) {
 if (window.__officerLockApplied) {
   window.__officerLockApplied = false;
   setTimeout(function () {
-    toast('班干小组已按岗位填好：班委 / 课代表 / 班干委员 / 其他同学');
+    toast('班干小组已按岗位填好：班长副班长 / 班委 / 课代表 / 班干委员 / 其他');
   }, 1500);
 }
 
@@ -5393,8 +5400,8 @@ function cloudPull() {
           resetTownIn(DB);
         }
         /* 云端存档若是班干名单之前的，同样套一次 */
-        if ((DB.v || 6) < 25) {
-          DB.v = 25;
+        if ((DB.v || 6) < 27) {
+          DB.v = 27;
           applyOfficerLock(DB);
         }
         save();
