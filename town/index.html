@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v25 · 班干分组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v26 · 积分细则修订<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -753,10 +753,9 @@ var RULES = [
 
   /* --- 纪律（全部扣分） --- */
   { id:'d1',  cat:'纪律', name:'迟到',         v:-1,  scope:'self', grp:'class' },
-  { id:'d2',  cat:'纪律', name:'上课违纪',     v:-2,  scope:'self', grp:'class' },
-  { id:'d3',  cat:'纪律', name:'被老师批评',   v:-3,  scope:'self', grp:'class' },
+  { id:'d3',  cat:'纪律', name:'屡次被点名批评', v:-3, scope:'self', grp:'class' },
   { id:'d4',  cat:'纪律', name:'作业缺交',     v:-2,  scope:'self', grp:'class' },
-  { id:'d5',  cat:'纪律', name:'仪容不合格',   v:-1,  scope:'self', grp:'class' },
+  { id:'d5',  cat:'纪律', name:'仪容仪表不合格', v:-2, scope:'self', grp:'class' },
   { id:'d6',  cat:'纪律', name:'手机 / 违禁品', v:-5, scope:'self', grp:'class' },
   { id:'d7',  cat:'纪律', name:'顶撞老师',     v:-5,  scope:'self', grp:'class' },
   { id:'d8',  cat:'纪律', name:'打架欺凌',     v:-10, scope:'self', grp:'class' },
@@ -774,16 +773,21 @@ var RULES = [
   { id:'w5', cat:'卫生', name:'值日迟到',      v:-1, scope:'self', grp:'duty' },
   { id:'w6', cat:'卫生', name:'值日缺勤',      v:-2, scope:'self', grp:'duty' },
 
-  /* --- 品德 --- */
-  { id:'m1', cat:'品德', name:'好人好事',      v:2,  scope:'self', grp:'class' },
-  { id:'m2', cat:'品德', name:'帮同学讲题',    v:2,  scope:'self', grp:'class' },
-  { id:'m3', cat:'品德', name:'班干部履职',    v:3,  scope:'self', grp:'officer' },
-  { id:'m4', cat:'品德', name:'承担班级事务',  v:3,  scope:'self', grp:'class' },
-  { id:'m5', cat:'品德', name:'参加校级活动',  v:3,  scope:'self', grp:'class' },
-  { id:'m6', cat:'品德', name:'校级获奖',      v:8,  scope:'self', grp:'class' },
+  /* --- 品德（含班干部履职、校级活动与获奖） --- */
+  { id:'m1',  cat:'品德', name:'好人好事',      v:2,  scope:'self', grp:'class' },
+  { id:'m2',  cat:'品德', name:'帮同学讲题',    v:2,  scope:'self', grp:'class' },
+  { id:'m3',  cat:'品德', name:'班委履职·周',   v:3,  scope:'self', grp:'officer' },
+  { id:'m4',  cat:'品德', name:'承担班级事务',  v:3,  scope:'self', grp:'class' },
+  { id:'m5',  cat:'品德', name:'校级活动预赛',  v:1,  scope:'self', grp:'class' },
+  { id:'m7',  cat:'品德', name:'校级活动表演',  v:3,  scope:'self', grp:'class' },
+  { id:'m8',  cat:'品德', name:'校级一等奖',    v:3,  scope:'self', grp:'class' },
+  { id:'m9',  cat:'品德', name:'校级二等奖',    v:2,  scope:'self', grp:'class' },
+  { id:'m10', cat:'品德', name:'校级三等奖',    v:1,  scope:'self', grp:'class' },
+  { id:'m11', cat:'品德', name:'课代表履职·周', v:2,  scope:'self', grp:'officer' },
+  { id:'m12', cat:'品德', name:'班干部失职·周', v:-1, scope:'self', grp:'officer' },
 
   /* --- 集体 --- */
-  { id:'c1', cat:'集体', name:'流动红旗',      v:2,  scope:'class', grp:'class' },
+  { id:'c1', cat:'集体', name:'班级流动红旗',  v:10, scope:'class', grp:'class' },
   { id:'c2', cat:'集体', name:'集会受表扬',    v:1,  scope:'class', grp:'class' },
   { id:'c3', cat:'集体', name:'班级文化评优',  v:3,  scope:'self', grp:'class' },
   { id:'c4', cat:'集体', name:'集体活动',      v:2,  scope:'self', grp:'class' },
@@ -792,15 +796,12 @@ var RULES = [
   { id:'c7', cat:'集体', name:'小组排第 3',    v:1,  scope:'group', grp:'class' },
 
   /* --- 晚修（作用于晚修小组） --- */
-  { id:'n1', cat:'纪律', name:'晚修纪律好',    v:2,  scope:'group', grp:'night' },
-  { id:'n2', cat:'纪律', name:'晚修违纪',      v:-2, scope:'group', grp:'night' },
+  { id:'n2', cat:'纪律', name:'晚修违纪',      v:-1, scope:'group', grp:'night' },
 
-  /* --- 宿舍（每月一评；big=突破单日上限的特别奖励） --- */
-  { id:'r6', cat:'宿舍', name:'宿舍卫生达标',  v:1,  scope:'group', grp:'dorm' },
+  /* --- 宿舍（big=突破单日上限的特别奖励） --- */
   { id:'r7', cat:'宿舍', name:'宿舍卫生不达标', v:-1, scope:'group', grp:'dorm' },
-  { id:'r1', cat:'宿舍', name:'文明宿舍',      v:15, scope:'group', grp:'dorm', big:true },
-  { id:'r2', cat:'宿舍', name:'宿舍卫生优秀',  v:5,  scope:'group', grp:'dorm', big:true },
-  { id:'r3', cat:'宿舍', name:'宿舍纪律扣分',  v:-5, scope:'group', grp:'dorm' },
+  { id:'r1', cat:'宿舍', name:'文明宿舍',      v:8,  scope:'group', grp:'dorm', big:true },
+  { id:'r3', cat:'宿舍', name:'宿舍纪律扣分',  v:-3, scope:'group', grp:'dorm' },
   { id:'r4', cat:'宿舍', name:'连续两月文明宿舍', v:20, scope:'group', grp:'dorm', big:true },
   { id:'r5', cat:'宿舍', name:'学期最佳宿舍',  v:30, scope:'group', grp:'dorm', big:true }
 ];
