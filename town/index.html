@@ -328,6 +328,17 @@ button,input,select{font-family:inherit;}
     padding:1px 5px;margin-right:3px;color:var(--ink2);line-height:16px;}
   .gtag:hover{background:#E4ECEE;}
 
+  /* 单人分组多选（一人可属多组） */
+  .sgRow{padding:9px 0;border-bottom:1px solid #F2F6F7;}
+  .sgRow:last-child{border-bottom:0;}
+  .sgRowH{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:7px;}
+  .sgRowH em{font-style:normal;margin-left:auto;font-size:11.5px;color:var(--brand-d);font-weight:600;}
+  .sgBtns{display:flex;flex-wrap:wrap;gap:6px;}
+  .sgPick{width:34px;height:27px;border:1px solid var(--line);background:#fff;border-radius:7px;
+    font-size:12px;font-family:inherit;color:var(--ink2);cursor:pointer;transition:.15s;}
+  .sgPick:hover{border-color:#BEE7DE;background:#F7FBFA;}
+  .sgPick.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:700;}
+
   /* 分组管理页 */
   .gTypeTabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
   .gTypeTabs button{border:0;background:#F1F5F6;color:var(--ink2);font-size:13px;
@@ -465,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v23 · 基金归零<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v24 · 一人可多组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -631,7 +642,7 @@ function applyClassGroupLock(stuArr) {
   if (!stuArr || stuArr.length !== CLASS_GROUP_LOCK.length) return false;
   stuArr.forEach(function (s, i) {
     if (!s.groups) s.groups = {};
-    s.groups['class'] = CLASS_GROUP_LOCK[i];
+    s.groups['class'] = [CLASS_GROUP_LOCK[i]];
   });
   return true;
 }
@@ -888,16 +899,57 @@ function defaultGroup(i, total, m) {
   return extra + Math.floor((i - cut) / base);
 }
 
-/* ===== 小组读写工具 ===== */
-function stuGroup(s, type) {
-  if (!s || !s.groups) return 0;
-  var g = parseInt(s.groups[type], 10);
-  return isNaN(g) ? 0 : g;
+/* ===== 小组读写工具 =====
+   v24 起：一个人在同一类小组里可以同时属于多个组（身兼多职）。
+   s.groups[type] 统一存成数组，如 [0, 3]；旧存档里的数字在 load() 时自动转成 [n]。
+   stuGroup() 仍返回"第一个组"，供只需要一个组号的显示场景使用。 */
+function stuGroups(s, type) {
+  if (!s || !s.groups) return [0];
+  var v = s.groups[type];
+  if (v === undefined || v === null || v === '') return [0];
+  if (Object.prototype.toString.call(v) === '[object Array]') {
+    var out = [];
+    v.forEach(function (x) {
+      var n = parseInt(x, 10);
+      if (!isNaN(n) && n >= 0 && out.indexOf(n) < 0) out.push(n);
+    });
+    if (!out.length) return [0];
+    out.sort(function (a, b) { return a - b; });
+    return out;
+  }
+  var n = parseInt(v, 10);
+  return isNaN(n) ? [0] : [n];
 }
+function stuGroup(s, type) {
+  var a = stuGroups(s, type);
+  return a.length ? a[0] : 0;
+}
+function hasGroup(s, type, idx) {
+  return stuGroups(s, type).indexOf(idx) >= 0;
+}
+/* 设为"只有一个组"（平均分组、批量导入覆盖时用） */
 function setStuGroup(s, type, g) {
   if (!s) return;
   if (!s.groups) s.groups = {};
-  s.groups[type] = parseInt(g, 10) || 0;
+  s.groups[type] = [parseInt(g, 10) || 0];
+}
+/* 并入若干个组（不清掉原有的），用于身兼多职 */
+function addStuGroups(s, type, arr) {
+  if (!s) return;
+  if (!s.groups) s.groups = {};
+  var cur = stuGroups(s, type).slice();
+  arr.forEach(function (x) {
+    var n = parseInt(x, 10);
+    if (!isNaN(n) && n >= 0 && n < GROUP_MAX && cur.indexOf(n) < 0) cur.push(n);
+  });
+  s.groups[type] = cur;
+}
+/* 勾掉某一个组 */
+function dropStuGroup(s, type, g) {
+  if (!s) return;
+  var n = parseInt(g, 10) || 0;
+  var cur = stuGroups(s, type).filter(function (x) { return x !== n; });
+  s.groups[type] = cur.length ? cur : [0];
 }
 /* 某类某组的自定义名字 */
 function groupName(type, idx) {
@@ -912,14 +964,13 @@ function setGroupName(type, idx, nm) {
 }
 /* 某类某组的成员 */
 function membersOf(type, idx) {
-  return DB.students.filter(function (s) { return stuGroup(s, type) === idx; });
+  return DB.students.filter(function (s) { return hasGroup(s, type, idx); });
 }
-/* 某类实际用到几个组（最大组号 +1） */
+/* 某类实际用到几个组（最大组号 +1），多组制下按所有组号取最大 */
 function groupUsedCount(type) {
   var mx = -1;
   DB.students.forEach(function (s) {
-    var g = stuGroup(s, type);
-    if (g > mx) mx = g;
+    stuGroups(s, type).forEach(function (g) { if (g > mx) mx = g; });
   });
   return mx + 1;
 }
@@ -927,11 +978,11 @@ function groupUsedCount(type) {
 /* 新生初始分组：五类都按 GROUP_MAX 组平均，宿舍按 12 人一间 */
 function initGroups(i, total, dormIdx) {
   return {
-    officer: defaultGroup(i, total, GROUP_MAX),
-    night:   defaultGroup(i, total, GROUP_MAX),
-    class:   defaultGroup(i, total, GROUP_MAX),
-    duty:    defaultGroup(i, total, GROUP_MAX),
-    dorm:    (dormIdx !== undefined) ? dormIdx : Math.floor(i / DORM_SIZE)
+    officer: [defaultGroup(i, total, GROUP_MAX)],
+    night:   [defaultGroup(i, total, GROUP_MAX)],
+    'class': [defaultGroup(i, total, GROUP_MAX)],
+    duty:    [defaultGroup(i, total, GROUP_MAX)],
+    dorm:    [(dormIdx !== undefined) ? dormIdx : Math.floor(i / DORM_SIZE)]
   };
 }
 
@@ -940,7 +991,7 @@ function newDB() {
   for (var i = 0; i < NAMES.length; i++) {
     var g0 = initGroups(i, NAMES.length);
     /* 课堂小组按老师给的固定名单 */
-    if (CLASS_GROUP_LOCK[i] !== undefined) g0['class'] = CLASS_GROUP_LOCK[i];
+    if (CLASS_GROUP_LOCK[i] !== undefined) g0['class'] = [CLASS_GROUP_LOCK[i]];
     arr.push({
       id: i,
       name: NAMES[i],
@@ -954,7 +1005,7 @@ function newDB() {
     });
   }
   return {
-    v: 22, students: arr, records: [],
+    v: 24, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
@@ -1000,10 +1051,18 @@ function load() {
           officer: oldG, night: oldG, 'class': oldG, duty: oldG, dorm: oldD
         };
       }
-      /* 每类都补齐 + 越界归 0 */
+      /* 每类都规范化：统一存成数组（v24 一人可多组），越界归 0 */
       GROUP_TYPES.forEach(function (t) {
-        var g = parseInt(s.groups[t.id], 10);
-        if (isNaN(g) || g < 0 || g >= GROUP_MAX) s.groups[t.id] = 0;
+        var v0 = s.groups[t.id];
+        var arr = [];
+        var push = function (x) {
+          var n = parseInt(x, 10);
+          if (!isNaN(n) && n >= 0 && n < GROUP_MAX && arr.indexOf(n) < 0) arr.push(n);
+        };
+        if (Object.prototype.toString.call(v0) === '[object Array]') v0.forEach(push);
+        else push(v0);
+        if (!arr.length) arr = [0];
+        s.groups[t.id] = arr;
       });
     });
     if (!d.groupNames || typeof d.groupNames !== 'object') d.groupNames = {};
@@ -1024,6 +1083,7 @@ function load() {
       window.__scoresReset = true;
       window.__dataUpgraded = true;
     }
+    if ((d.v || 6) < 24) d.v = 24;
     /* ===== v22：小镇推倒重来（清建筑 + 收回宠物 + 地块缩回最小）===== */
     if ((d.v || 6) < 22) {
       d.v = 22;
@@ -3861,7 +3921,7 @@ function applyRule(rid) {
     var gs = {};
     Object.keys(pickedStu).forEach(function (id) {
       if (pickedStu[id] && DB.students[id]) {
-        gs[stuGroup(DB.students[id], gtype)] = 1;
+        stuGroups(DB.students[id], gtype).forEach(function (g) { gs[g] = 1; });
       }
     });
     var gkeys = Object.keys(gs);
@@ -3869,7 +3929,9 @@ function applyRule(rid) {
       toast('先在下面点中一个学生（他在' + gdef.name + '的第几组，就给那一组记）');
       return;
     }
-    targets = DB.students.filter(function (s) { return gs[stuGroup(s, gtype)]; });
+    targets = DB.students.filter(function (s) {
+      return stuGroups(s, gtype).some(function (g) { return gs[g]; });
+    });
   } else {
     Object.keys(pickedStu).forEach(function (id) {
       if (pickedStu[id] && DB.students[id]) targets.push(DB.students[id]);
@@ -4087,7 +4149,7 @@ function fillManual(btn) {
   var n = 0;
   wrap.querySelectorAll('.sc-row').forEach(function (row) {
     var s = DB.students[parseInt(row.getAttribute('data-id'), 10)];
-    if (filter !== null && stuGroup(s, manualGrpType) !== filter) return;
+    if (filter !== null && !hasGroup(s, manualGrpType, filter)) return;
     row.querySelector(kind === 'add' ? '.p' : '.m').value = v;
     n++;
   });
@@ -4595,7 +4657,8 @@ function renderGroups() {
       : ('每组各 ' + base + ' 人。');
     if (!confirm('把 ' + n + ' 人平均分成 ' + cnt + ' 个' + gtDef(groupTab).name + '？\n\n' +
       splitText + '\n' +
-      '注意：只影响「' + gtDef(groupTab).name + '」，其他四类不动。')) return;
+      '注意 1：只影响「' + gtDef(groupTab).name + '」，其他四类不动。\n' +
+      '注意 2：平均分组会把每人重设成「只属于一个组」，原来身兼多组的会被清掉。')) return;
     DB.students.forEach(function (s, i) {
       setStuGroup(s, groupTab, defaultGroup(i, n, cnt));
     });
@@ -4688,7 +4751,7 @@ function openGroupImport() {
     var ok = 0, bad = [], gi = 0, txt = '';
     rows.forEach(function (r) {
       var s = findStuByName(r.name);
-      if (s) { setStuGroup(s, type, r.gi); ok++; }
+      if (s) { addStuGroups(s, type, [r.gi]); ok++; }
       else bad.push(r.name);
     });
     if (!ok) {
@@ -4705,8 +4768,7 @@ function openGroupImport() {
     /* 统计每组人数，方便老师核对 */
     var cntMap = {};
     DB.students.forEach(function (s) {
-      var g = stuGroup(s, type);
-      cntMap[g] = (cntMap[g] || 0) + 1;
+      stuGroups(s, type).forEach(function (g) { cntMap[g] = (cntMap[g] || 0) + 1; });
     });
     Object.keys(cntMap).forEach(function (k) {
       txt += '第' + (parseInt(k, 10) + 1) + '组' + cntMap[k] + '人 ';
@@ -4733,9 +4795,11 @@ function renderManage() {
   DB.students.forEach(function (s, i) {
     var tags = '';
     GROUP_TYPES.forEach(function (t) {
-      var g = stuGroup(s, t.id);
-      tags += '<span class="gtag" title="' + t.name + '：' + groupName(t.id, g) + '">' +
-        t.icon + g + '</span>';
+      var gs = stuGroups(s, t.id);
+      var tip = t.name + '：' + gs.map(function (g) { return groupName(t.id, g); }).join('、');
+      var label = gs.map(function (g) { return g + 1; }).join('·');
+      tags += '<span class="gtag" title="' + tip + '">' +
+        t.icon + label + (gs.length > 1 ? '<b style="color:#D9534F">+</b>' : '') + '</span>';
     });
     html += '<tr><td style="color:var(--ink3);font-size:12px">' + (i + 1) + '</td>' +
       '<td><input data-nm="' + s.id + '" value="' + s.name + '" style="border:1px solid #E3EBEE;border-radius:6px;padding:3px 7px;font-size:13px;width:110px;font-family:inherit"></td>' +
@@ -4776,33 +4840,62 @@ function openStuGroups(sid) {
 
   var rows = '';
   GROUP_TYPES.forEach(function (t) {
-    var cur = stuGroup(s, t.id);
-    var opts = '';
+    var cur = stuGroups(s, t.id);
+    var btns = '';
     for (var g = 0; g < GROUP_MAX; g++) {
       var cnt = membersOf(t.id, g).length;
-      opts += '<option value="' + g + '"' + (cur === g ? ' selected' : '') + '>' +
-        groupName(t.id, g) + '（' + cnt + '人）</option>';
+      var on = cur.indexOf(g) >= 0;
+      btns += '<button type="button" class="sgPick' + (on ? ' on' : '') + '"' +
+        ' data-gt="' + t.id + '" data-g="' + g + '"' +
+        ' title="' + groupName(t.id, g) + ' · 本组 ' + cnt + ' 人">' + (g + 1) + '</button>';
     }
-    rows += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #F2F6F7">' +
-      '<span style="width:88px;font-size:12.5px">' + t.icon + ' ' + t.name + '</span>' +
-      '<select data-gt="' + t.id + '" style="flex:1;border:1px solid var(--line);border-radius:8px;' +
-      'padding:6px 8px;font-size:12.5px;font-family:inherit">' + opts + '</select></div>';
+    rows += '<div class="sgRow" data-rowt="' + t.id + '">' +
+      '<div class="sgRowH"><span>' + t.icon + ' ' + t.name + '</span>' +
+        '<em>已选：' + cur.map(function (g) { return g + 1; }).join('、') + '</em></div>' +
+      '<div class="sgBtns">' + btns + '</div></div>';
   });
 
   openModal(
     '<div class="mh"><h3>' + s.name + ' 的分组</h3><button class="x" onclick="closeModal()">×</button></div>' +
     '<div class="mb">' +
-      '<div class="dNote">同一个人可以同时在五类小组里有不同位置——班干组一个、晚修组一个、课堂组一个、值日组一个、宿舍组一个，互不影响。</div>' +
+      '<div class="dNote">一个人在同一类小组里<b>可以同时属于多个组</b>（身兼多职就都点上）。<br>' +
+      '五类小组互相独立：班干、晚修、课堂、值日、宿舍各选各的，互不影响。点数字就是选中，再点一下取消。</div>' +
       rows +
     '</div>' +
     '<div class="mf"><button class="btn ghost" onclick="closeModal()">取消</button>' +
     '<button class="btn" id="btnStuGroupSave">保存</button></div>'
   );
 
+  /* 点数字切换选中 */
+  document.querySelectorAll('#mask .sgPick').forEach(function (b) {
+    b.addEventListener('click', function () {
+      b.classList.toggle('on');
+      var t = b.getAttribute('data-gt');
+      var row = document.querySelector('#mask .sgRow[data-rowt="' + t + '"]');
+      if (!row) return;
+      var picked = [];
+      row.querySelectorAll('.sgPick.on').forEach(function (x) {
+        picked.push(parseInt(x.getAttribute('data-g'), 10) + 1);
+      });
+      picked.sort(function (a, b2) { return a - b2; });
+      var em = row.querySelector('.sgRowH em');
+      if (em) em.textContent = '已选：' + (picked.length ? picked.join('、') : '无（默认第 1 组）');
+    });
+  });
+
   document.getElementById('btnStuGroupSave').addEventListener('click', function () {
-  if (typeof needUnlock === 'function' && !needUnlock()) return;
-    document.querySelectorAll('#mask select[data-gt]').forEach(function (sel) {
-      setStuGroup(s, sel.getAttribute('data-gt'), parseInt(sel.value, 10));
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    var map = {};
+    document.querySelectorAll('#mask .sgPick.on').forEach(function (b) {
+      var t = b.getAttribute('data-gt');
+      if (!map[t]) map[t] = [];
+      map[t].push(parseInt(b.getAttribute('data-g'), 10));
+    });
+    GROUP_TYPES.forEach(function (t) {
+      var arr = (map[t.id] || []).slice().sort(function (a, b2) { return a - b2; });
+      if (!arr.length) arr = [0];
+      if (!s.groups) s.groups = {};
+      s.groups[t.id] = arr;
     });
     save();
     closeModal();
