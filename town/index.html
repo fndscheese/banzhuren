@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v32 · 自己加组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v33 · 数据核对<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -3330,7 +3330,14 @@ document.getElementById('stats').innerHTML +=
     '<div class="stat g"><b>' + built + '</b><span>全班已建建筑</span></div>' +
     '<div class="stat p"><b>' + avg + '</b><span>人均累计得分</span></div>' +
     '<div class="stat"><b>' + rich + '</b><span>已经开工的小镇</span></div>' +
-    (owe ? '<div class="stat"><b style="color:var(--red)">' + owe + '</b><span>欠分人数</span></div>' : '');
+    (owe ? '<div class="stat"><b style="color:var(--red)">' + owe + '</b><span>欠分人数</span></div>' : '') +
+    (function () {
+      var f = fpNow(), au = fpAudit(f);
+      return '<div class="stat" id="fpCard" style="cursor:pointer" title="点这里看数据核对详情">' +
+        '<b id="fpCode" style="font-size:15px;letter-spacing:1px;color:' +
+          (au.ok ? 'var(--brand-d)' : 'var(--red)') + '">' + fpCode(f) + '</b>' +
+        '<span>' + (au.ok ? '数据核对' : '⚠ 数据异常') + '</span></div>';
+    })();
 
   var html = '';
   DB.students.forEach(function (s) {
@@ -3386,6 +3393,7 @@ document.getElementById('stats').addEventListener('click', function (e) {
   if (tid === 'btnDonate') { openDonate(); return; }
   if (tid === 'btnAdjClass') { openClassAdjust(); return; }
   if (tid === 'btnZeroFund') { zeroClassFund(); return; }
+  if (tid === 'fpCard' || tid === 'fpCode') { openFingerprint(); return; }
   if (tid !== 'btnMovie') return;
   var cp = classPoints();
   if (cp < CLASS_GOAL) { toast('还差 ' + (CLASS_GOAL - cp) + ' 分'); return; }
@@ -4116,6 +4124,113 @@ function manualPaneHtml() {
   return h;
 }
 
+/* =====================================================================
+   数据核对（防后台改分）
+   ---------------------------------------------------------------------
+   原理：老师在界面里正常加减分，一定会写一条积分流水。
+   所以「总分变了、但流水条数没变」就很可疑 —— 大概率有人绕过界面改了数据。
+   这不是加密防护，是"能被发现"；真要防住必须靠服务器。
+   ===================================================================== */
+var FP_KEY = 'bzr_town_fp';
+
+function fpNow() {
+  var sum = 0, spent = 0, pen = 0, items = 0;
+  (DB.students || []).forEach(function (s) {
+    sum += (s.points || 0);
+    spent += (s.spent || 0);
+    pen += (s.penalty || 0);
+    items += (s.items ? s.items.length : 0);
+  });
+  return {
+    n: (DB.students || []).length,
+    sum: sum, spent: spent, pen: pen, items: items,
+    recs: (DB.records || []).length
+  };
+}
+function fpCode(f) {
+  var str = [f.n, f.sum, f.spent, f.pen, f.items, f.recs].join('|');
+  var h = 5381;
+  for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return ('0000' + h.toString(36).toUpperCase()).slice(-4);
+}
+function fpBaseGet() {
+  try { return JSON.parse(localStorage.getItem(FP_KEY) || 'null'); } catch (e) { return null; }
+}
+/* 把当前状态记成"基线"，以后就拿它对比 */
+function fpBaseSet(f) {
+  f = f || fpNow();
+  var d = new Date();
+  var rec = {
+    t: (d.getMonth() + 1) + '月' + d.getDate() + '日 ' +
+       ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2),
+    n: f.n, sum: f.sum, recs: f.recs, items: f.items, code: fpCode(f)
+  };
+  try { localStorage.setItem(FP_KEY, JSON.stringify(rec)); } catch (e) {}
+  return rec;
+}
+function fpAudit(f) {
+  f = f || fpNow();
+  var base = fpBaseGet();
+  if (!base) return { has: false, ok: true, base: null, msg: '还没设过核对基线（点下面按钮记一下当前状态）' };
+  var dSum = f.sum - base.sum;
+  var dRecs = f.recs - base.recs;
+  if (dRecs < 0) {
+    return { has: true, ok: false, base: base,
+      msg: '积分流水条数变少了（' + base.recs + ' → ' + f.recs + ' 条），记录被清过。' };
+  }
+  if (dSum !== 0 && dRecs === 0) {
+    return { has: true, ok: false, base: base,
+      msg: '总分变了 ' + (dSum > 0 ? '+' : '') + dSum + ' 分，却一条新流水都没有 —— 很像有人绕过界面改了分数。' };
+  }
+  if (f.items < base.items) {
+    return { has: true, ok: false, base: base,
+      msg: '建筑数变少了（' + base.items + ' → ' + f.items + ' 处），有人拆东西或改过数据。' };
+  }
+  return { has: true, ok: true, base: base,
+    msg: '正常（总分变动和流水条数对得上）' };
+}
+
+function openFingerprint() {
+  var f = fpNow(), au = fpAudit(f), code = fpCode(f);
+  var row = function (k, v, hi) {
+    return '<div style="display:flex;justify-content:space-between;padding:7px 0;' +
+      'border-bottom:1px solid #F2F6F7;font-size:12.5px"><span style="color:var(--ink2)">' + k +
+      '</span><b style="color:' + (hi || 'var(--ink)') + '">' + v + '</b></div>';
+  };
+  var baseTxt = au.has
+    ? ('上次核对：<b>' + au.base.t + '</b>　总分 ' + au.base.sum + '　流水 ' + au.base.recs + ' 条　码 ' + au.base.code)
+    : '还没有核对基线。';
+  var boxColor = au.ok ? '#F3F9F7' : '#FFF3F2';
+  var boxBorder = au.ok ? '#CDE9E1' : '#F5C6C2';
+  var boxText = au.ok ? 'var(--brand-d)' : '#C0392B';
+  openModal(
+    '<div class="mh"><h3>数据核对</h3><button class="x" onclick="closeModal()">×</button></div>' +
+    '<div class="mb">' +
+      '<div class="dNote">每周点一次「记下当前状态」，以后打开页面自动对比。<br>' +
+        '正常加减分一定会写流水；<b>分数变了流水没变</b>，就是有人绕过界面动过数据。</div>' +
+      '<div style="background:' + boxColor + ';border:1px solid ' + boxBorder + ';border-radius:10px;' +
+        'padding:10px 12px;margin:12px 0;font-size:12.5px;color:' + boxText + ';line-height:1.7">' +
+        (au.ok ? '✓ ' : '⚠ ') + au.msg + '</div>' +
+      row('学生数', f.n + ' 人') +
+      row('积分总和', f.sum + ' 分') +
+      row('已消费 / 扣罚', f.spent + ' / ' + f.pen + ' 分') +
+      row('建筑', f.items + ' 处') +
+      row('积分流水', f.recs + ' 条') +
+      row('校验码', code, 'var(--brand-d)') +
+      '<div style="font-size:11.5px;color:var(--ink3);margin-top:12px;line-height:1.7">' + baseTxt + '</div>' +
+    '</div>' +
+    '<div class="mf"><button class="btn ghost" onclick="closeModal()">关闭</button>' +
+    '<button class="btn" id="btnFpSave">记下当前状态</button></div>'
+  );
+  document.getElementById('btnFpSave').addEventListener('click', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    var rec = fpBaseSet(fpNow());
+    closeModal();
+    renderOverview();
+    toast('已记下：总分 ' + rec.sum + ' · 流水 ' + rec.recs + ' 条 · 码 ' + rec.code);
+  });
+}
+
 /* ---------- 点一下规则，就给选中的人记分 ---------- */
 function applyRule(rid) {
   if (typeof needUnlock === 'function' && !needUnlock()) return;
@@ -4219,6 +4334,7 @@ function undoLastScore() {
   DB.records.splice(0, undoBuf.recs);
   undoBuf = null;
   save();
+  fpBaseSet(fpNow());   /* 撤销会删掉流水，刷新基线免得下次误报 */
   renderScore();
   renderOverview();
   toast('已撤销上一次记分');
@@ -4464,6 +4580,7 @@ document.getElementById('btnClearRec').addEventListener('click', function () {
   if (!confirm('清空全部积分记录？（学生积分和建筑不受影响）')) return;
   DB.records = [];
   save();
+  fpBaseSet(fpNow());   /* 主动清记录，刷新基线免得误报 */
   renderRecords();
   toast('记录已清空');
 });
@@ -4481,6 +4598,7 @@ if (btnResetScore) btnResetScore.addEventListener('click', function () {
   if (!confirm('再确认一次：真的要现在归零吗？')) return;
   resetScoresIn(DB);
   save();
+  fpBaseSet(fpNow());   /* 重置类的操作会让总分突变，顺手刷新基线，免得下次误报 */
   renderRecords();
   renderOverview();
   if (typeof renderRank === 'function') renderRank();
@@ -4503,6 +4621,7 @@ if (btnResetTown) btnResetTown.addEventListener('click', function () {
   if (!confirm('再确认一次：真的要把 ' + cnt + ' 处建筑全拆了吗？')) return;
   resetTownIn(DB);
   save();
+  fpBaseSet(fpNow());   /* 拆建筑会让建筑数突变，刷新基线免得误报 */
   renderOverview();
   if (typeof renderScore === 'function') renderScore();
   if (typeof renderRank === 'function') renderRank();
@@ -5248,7 +5367,7 @@ document.getElementById('btnRestore').addEventListener('click', function () {
    · 勾了「7 天内不用再输」才会记住，默认每次打开都是锁的
    ===================================================================== */
 var UNLOCKED = false;
-var LOCK_UNTIL_KEY = 'bzr_town_lock_until';    /* 记住到什么时候 */
+var LOCK_SESSION = 'bzr_town_unlock';          /* 解锁标记：sessionStorage，关浏览器就失效 */
 var LOCK_HASH_KEY  = 'bzr_town_lock_hash';     /* 老师改过的密码哈希 */
 var LOCK_SALT      = 'bzr711#';
 var LOCK_HASH_DEFAULT = 'e2fe7d38';            /* 默认密码 000531 */
@@ -5282,9 +5401,9 @@ function refreshLockUI() {
 }
 function lockBoot() {
   try {
-    var until = parseInt(localStorage.getItem(LOCK_UNTIL_KEY) || '0', 10);
-    if (until && Date.now() < until) UNLOCKED = true;
-    else if (until) localStorage.removeItem(LOCK_UNTIL_KEY);
+    if (sessionStorage.getItem(LOCK_SESSION) === '1') UNLOCKED = true;
+    /* 顺手清掉旧版留下的"7 天记住" */
+    localStorage.removeItem('bzr_town_lock_until');
   } catch (e) {}
   refreshLockUI();
 }
@@ -5312,7 +5431,7 @@ function openLock() {
     );
     document.getElementById('btnLockOut').addEventListener('click', function () {
       UNLOCKED = false;
-      try { localStorage.removeItem(LOCK_UNTIL_KEY); } catch (e) {}
+      try { sessionStorage.removeItem(LOCK_SESSION); } catch (e) {}
       closeModal();
       refreshLockUI();
       toast('已退出，回到浏览模式');
@@ -5344,10 +5463,9 @@ function openLock() {
       '<div class="dNote">现在是<b>浏览模式</b>：学生能看小镇、看排行榜，但改不了分数。<br>' +
       '输入老师密码后，才能记分、建房、改分组。</div>' +
       '<input id="lockPwd" type="password" placeholder="请输入密码" style="' + LOCK_INPUT_STYLE + '">' +
-      '<label style="display:flex;align-items:center;gap:7px;margin-top:12px;font-size:12.5px;' +
-        'color:var(--ink2);cursor:pointer">' +
-        '<input type="checkbox" id="lockRemember"> 这台电脑 7 天内不用再输' +
-      '</label>' +
+      '<div style="margin-top:10px;font-size:11.5px;color:var(--ink3);line-height:1.7">' +
+        '解锁后在<b>当前这个浏览器标签页</b>里一直有效；<b>关掉浏览器或点「退出登录」就要重新输</b>。' +
+      '</div>' +
       '<div id="lockMsg" style="font-size:12px;color:#D9534F;margin-top:8px;min-height:16px"></div>' +
     '</div>' +
     '<div class="mf">' +
@@ -5367,10 +5485,7 @@ function openLock() {
       return;
     }
     UNLOCKED = true;
-    var rb = document.getElementById('lockRemember');
-    if (rb && rb.checked) {
-      try { localStorage.setItem(LOCK_UNTIL_KEY, String(Date.now() + 7 * 24 * 3600 * 1000)); } catch (e) {}
-    }
+    try { sessionStorage.setItem(LOCK_SESSION, '1'); } catch (e) {}
     closeModal();
     refreshLockUI();
     toast('已解锁，可以记分了');
@@ -5439,6 +5554,16 @@ if (window.__officerLockApplied) {
     toast('班干小组已按岗位填好（含两个空白组：课堂小组长、晚修值日班长）');
   }, 1500);
 }
+
+/* 数据核对：和上次基线对不上就警告一次 */
+(function () {
+  var au = fpAudit(fpNow());
+  if (au.has && !au.ok) {
+    setTimeout(function () {
+      toast('⚠ 数据核对不上：' + au.msg + '（点总览页的校验码看详情）');
+    }, 2300);
+  }
+})();
 
 /* 晚修小组刚按名单填好，提示一次 */
 if (window.__nightLockApplied) {
