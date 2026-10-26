@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v29 · 班干周评分级<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v30 · 晚修分组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -686,6 +686,92 @@ function applyOfficerLock(d) {
   });
   if (!d.groupNames) d.groupNames = {};
   d.groupNames['officer'] = OFFICER_NAMES.slice();
+  return true;
+}
+
+/* ===== 晚修小组固定分组（老师 2026-10-26 给的，6 组 39 人）=====
+   每组第一个是晚修小组长；不参加晚修的 16 人统一放第 7 组「不参加晚修」
+   6 位晚修小组长同时进「班干小组 → 晚修值日班长」那一组（班干第 6 组） */
+var NIGHT_GROUPS = {
+  0: 1,   /* 陈天宇：第2组 */
+  1: 5,   /* 金紫琪：第6组 */
+  2: 2,   /* 曾景瑞：第3组 */
+  3: 5,   /* 曾雨萍：第6组 */
+  4: 2,   /* 杨国鑫：第3组 */
+  5: 3,   /* 张睿福：第4组 */
+  6: 5,   /* 刘炜：第6组 */
+  7: 0,   /* 古欣怡：第1组 */
+  8: 5,   /* 卢梓萱：第6组 */
+  9: 0,   /* 邓易：第1组 */
+  10: 4,   /* 廖愉晴：第5组 */
+  11: 4,   /* 廖小雨：第5组 */
+  12: 2,   /* 曾惠怡：第3组 */
+  13: 0,   /* 林嘉铖：第1组 */
+  14: 6,   /* 缪華葳：第7组 */
+  15: 3,   /* 梁雨菲：第4组 */
+  16: 1,   /* 张妍珊：第2组 */
+  17: 6,   /* 杨圣：第7组 */
+  18: 1,   /* 韦秀美：第2组 */
+  19: 3,   /* 谢幸宜：第4组 */
+  20: 6,   /* 邹婉茹：第7组 */
+  21: 6,   /* 刘璇：第7组 */
+  22: 3,   /* 甘家吉：第4组 */
+  23: 1,   /* 杨惠婷：第2组 */
+  24: 6,   /* 莫晓楠：第7组 */
+  25: 4,   /* 何文超：第5组 */
+  26: 3,   /* 梁耀文：第4组 */
+  27: 4,   /* 王梓宇：第5组 */
+  28: 0,   /* 王梓瑶：第1组 */
+  29: 6,   /* 祖力皮喀尔·阿不来提：第7组 */
+  30: 0,   /* 王博雅：第1组 */
+  31: 6,   /* 莫鸿懿：第7组 */
+  32: 5,   /* 陈鹏晖：第6组 */
+  33: 6,   /* 黄月梅：第7组 */
+  34: 6,   /* 毛翔宇：第7组 */
+  35: 5,   /* 尹骏宇：第6组 */
+  36: 6,   /* 张嘉毅：第7组 */
+  37: 5,   /* 邓语芯：第6组 */
+  38: 3,   /* 朱文斌：第4组 */
+  39: 6,   /* 夏子斌：第7组 */
+  40: 6,   /* 黄广韬：第7组 */
+  41: 4,   /* 麻嘉成：第5组 */
+  42: 6,   /* 谭文俊：第7组 */
+  43: 6,   /* 王锦源：第7组 */
+  44: 2,   /* 甘米棋：第3组 */
+  45: 2,   /* 邹嘉富：第3组 */
+  46: 1,   /* 李梓悦：第2组 */
+  47: 4,   /* 陈智伟：第5组 */
+  48: 2,   /* 温帅楷：第3组 */
+  49: 0,   /* 谢谦宇：第1组 */
+  50: 5,   /* 陈欣楠：第6组 */
+  51: 6,   /* 谢桂梅：第7组 */
+  52: 1,   /* 李志涛：第2组 */
+  53: 1,   /* 游润笙：第2组 */
+  54: 6,   /* 谢子萱：第7组 */
+};
+var NIGHT_LEADERS = [7, 16, 2, 26, 41, 37];   /* 古欣怡、张妍珊、曾景瑞、梁耀文、麻嘉成、邓语芯 */
+var NIGHT_NAMES = ['第 1 组', '第 2 组', '第 3 组', '第 4 组', '第 5 组', '第 6 组', '不参加晚修'];
+
+function applyNightLock(d) {
+  if (!d || !d.students || d.students.length !== NAMES.length) return false;
+  d.students.forEach(function (s, i) {
+    if (!s.groups) s.groups = {};
+    var g = NIGHT_GROUPS[i];
+    s.groups['night'] = [(g === undefined ? 6 : g)];
+  });
+  /* 晚修小组长：挂到班干小组的「晚修值日班长」组（索引 5），并从「其他同学」里移出 */
+  if (typeof NIGHT_LEADERS !== 'undefined') {
+    NIGHT_LEADERS.forEach(function (i) {
+      var s = d.students[i];
+      if (!s) return;
+      var cur = stuGroups(s, 'officer').filter(function (x) { return x !== 6; });
+      if (cur.indexOf(5) < 0) cur.push(5);
+      cur.sort(function (a, b) { return a - b; });
+      s.groups['officer'] = cur;
+    });
+  }
+  if (!d.groupNames) d.groupNames = {};
+  d.groupNames['night'] = NIGHT_NAMES.slice();
   return true;
 }
 
@@ -1050,11 +1136,12 @@ function newDB() {
     });
   }
   var d0 = {
-    v: 28, students: arr, records: [],
+    v: 30, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
   applyOfficerLock(d0);
+  applyNightLock(d0);
   return d0;
 }
 
@@ -1154,6 +1241,12 @@ function load() {
     if ((d.v || 6) < 28) {
       d.v = 28;
       window.__officerLockApplied = applyOfficerLock(d);
+      window.__dataUpgraded = true;
+    }
+    /* v30：晚修小组按老师给的分组填好（组长同时进班干的「晚修值日班长」组） */
+    if ((d.v || 6) < 30) {
+      d.v = 30;
+      window.__nightLockApplied = applyNightLock(d);
       window.__dataUpgraded = true;
     }
     return d;
@@ -5257,6 +5350,14 @@ if (window.__officerLockApplied) {
   }, 1500);
 }
 
+/* 晚修小组刚按名单填好，提示一次 */
+if (window.__nightLockApplied) {
+  window.__nightLockApplied = false;
+  setTimeout(function () {
+    toast('晚修小组已填好：6 组（组长同时进了班干的「晚修值日班长」组）');
+  }, 1800);
+}
+
 /* 小镇刚被推倒重来，提示一次 */
 if (window.__townReset) {
   window.__townReset = false;
@@ -5414,6 +5515,11 @@ function cloudPull() {
         if ((DB.v || 6) < 28) {
           DB.v = 28;
           applyOfficerLock(DB);
+        }
+        /* 云端存档若是晚修分组之前的，同样套一次 */
+        if ((DB.v || 6) < 30) {
+          DB.v = 30;
+          applyNightLock(DB);
         }
         save();
         setCloudTag('☁ 已下载', 'var(--brand-d)');
