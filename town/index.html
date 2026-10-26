@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v27 · 班长组单列<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v28 · 预留两个组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -649,9 +649,11 @@ function applyClassGroupLock(stuArr) {
 
 /* ===== 班干小组固定名单（老师 2026-10-26 定的）=====
    第 1 组 班长/副班长　第 2 组 班委（学委/纪委/劳委）
-   第 3 组 各科课代表　第 4 组 班干委员　第 5 组 其他同学
-   一个人身兼多职就同时挂在多个组（v24 起支持）
-   名单里没有的同学统一放最后一组「其他同学」 */
+   第 3 组 各科课代表　第 4 组 班干委员
+   第 5 组 课堂小组长（预留，暂空）
+   第 6 组 晚修值日班长（预留，暂空）
+   第 7 组 其他同学（名单里没有的都在这里）
+   一个人身兼多职就同时挂在多个组（v24 起支持） */
 var OFFICER_GROUPS = {
   2: [1, 2, 3],   /* 曾景瑞 */
   4: [2],   /* 杨国鑫 */
@@ -672,14 +674,15 @@ var OFFICER_GROUPS = {
   50: [2],   /* 陈欣楠 */
   54: [1, 2],   /* 谢子萱 */
 };
-var OFFICER_NAMES = ['班长/副班长', '班委', '课代表', '班干委员', '其他同学'];
+var OFFICER_NAMES = ['班长/副班长', '班委', '课代表', '班干委员',
+                       '课堂小组长', '晚修值日班长', '其他同学'];
 
 function applyOfficerLock(d) {
   if (!d || !d.students || d.students.length !== NAMES.length) return false;
   d.students.forEach(function (s, i) {
     if (!s.groups) s.groups = {};
     var g = OFFICER_GROUPS[i];
-    s.groups['officer'] = g ? g.slice() : [4];
+    s.groups['officer'] = g ? g.slice() : [6];
   });
   if (!d.groupNames) d.groupNames = {};
   d.groupNames['officer'] = OFFICER_NAMES.slice();
@@ -1045,7 +1048,7 @@ function newDB() {
     });
   }
   var d0 = {
-    v: 27, students: arr, records: [],
+    v: 28, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
@@ -1142,6 +1145,12 @@ function load() {
     /* v27：班长、副班长单独成组 */
     if ((d.v || 6) < 27) {
       d.v = 27;
+      window.__officerLockApplied = applyOfficerLock(d);
+      window.__dataUpgraded = true;
+    }
+    /* v28：预留「课堂小组长」「晚修值日班长」两个空白组 */
+    if ((d.v || 6) < 28) {
+      d.v = 28;
       window.__officerLockApplied = applyOfficerLock(d);
       window.__dataUpgraded = true;
     }
@@ -5242,7 +5251,7 @@ if (window.__scoresReset) {
 if (window.__officerLockApplied) {
   window.__officerLockApplied = false;
   setTimeout(function () {
-    toast('班干小组已按岗位填好：班长副班长 / 班委 / 课代表 / 班干委员 / 其他');
+    toast('班干小组已按岗位填好（含两个空白组：课堂小组长、晚修值日班长）');
   }, 1500);
 }
 
@@ -5400,8 +5409,8 @@ function cloudPull() {
           resetTownIn(DB);
         }
         /* 云端存档若是班干名单之前的，同样套一次 */
-        if ((DB.v || 6) < 27) {
-          DB.v = 27;
+        if ((DB.v || 6) < 28) {
+          DB.v = 28;
           applyOfficerLock(DB);
         }
         save();
