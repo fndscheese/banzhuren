@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v24 · 一人可多组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v25 · 班干分组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -644,6 +644,44 @@ function applyClassGroupLock(stuArr) {
     if (!s.groups) s.groups = {};
     s.groups['class'] = [CLASS_GROUP_LOCK[i]];
   });
+  return true;
+}
+
+/* ===== 班干小组固定名单（老师 2026-10-26 给的）=====
+   第 1 组 班委 / 第 2 组 各科课代表 / 第 3 组 班干委员
+   一个人身兼多职就同时挂在多个组（v24 起支持）
+   名单里没有的同学统一放第 4 组「其他同学」 */
+var OFFICER_GROUPS = {
+  2: [0, 1, 2],   /* 曾景瑞 */
+  4: [1],   /* 杨国鑫 */
+  6: [1],   /* 刘炜 */
+  7: [0, 1],   /* 古欣怡 */
+  8: [1],   /* 卢梓萱 */
+  10: [1],   /* 廖愉晴 */
+  11: [0],   /* 廖小雨 */
+  12: [1],   /* 曾惠怡 */
+  15: [0, 2],   /* 梁雨菲 */
+  25: [1],   /* 何文超 */
+  28: [2],   /* 王梓瑶 */
+  30: [1],   /* 王博雅 */
+  34: [2],   /* 毛翔宇 */
+  37: [1],   /* 邓语芯 */
+  41: [1],   /* 麻嘉成 */
+  48: [1, 2],   /* 温帅楷 */
+  50: [1],   /* 陈欣楠 */
+  54: [0, 1],   /* 谢子萱 */
+};
+var OFFICER_NAMES = ['班委', '课代表', '班干委员', '其他同学'];
+
+function applyOfficerLock(d) {
+  if (!d || !d.students || d.students.length !== NAMES.length) return false;
+  d.students.forEach(function (s, i) {
+    if (!s.groups) s.groups = {};
+    var g = OFFICER_GROUPS[i];
+    s.groups['officer'] = g ? g.slice() : [3];
+  });
+  if (!d.groupNames) d.groupNames = {};
+  d.groupNames['officer'] = OFFICER_NAMES.slice();
   return true;
 }
 
@@ -1004,11 +1042,13 @@ function newDB() {
       items: []          /* 小镇上的建筑 */
     });
   }
-  return {
-    v: 24, students: arr, records: [],
+  var d0 = {
+    v: 25, students: arr, records: [],
     groupNames: {},          /* { officer: [...], night: [...], ... } 自定义组名 */
     classFund: 0, classSpent: 0, classAdjust: 0, createdAt: todayKey()
   };
+  applyOfficerLock(d0);
+  return d0;
 }
 
 function load() {
@@ -1089,6 +1129,12 @@ function load() {
       d.v = 22;
       resetTownIn(d);
       window.__townReset = true;
+      window.__dataUpgraded = true;
+    }
+    /* ===== v25：班干小组按岗位名单填好 ===== */
+    if ((d.v || 6) < 25) {
+      d.v = 25;
+      window.__officerLockApplied = applyOfficerLock(d);
       window.__dataUpgraded = true;
     }
     return d;
@@ -5184,6 +5230,14 @@ if (window.__scoresReset) {
   }, 1300);
 }
 
+/* 班干小组刚按岗位名单填好，提示一次 */
+if (window.__officerLockApplied) {
+  window.__officerLockApplied = false;
+  setTimeout(function () {
+    toast('班干小组已按岗位填好：班委 / 课代表 / 班干委员 / 其他同学');
+  }, 1500);
+}
+
 /* 小镇刚被推倒重来，提示一次 */
 if (window.__townReset) {
   window.__townReset = false;
@@ -5336,6 +5390,11 @@ function cloudPull() {
         if ((DB.v || 6) < 22) {
           DB.v = 22;
           resetTownIn(DB);
+        }
+        /* 云端存档若是班干名单之前的，同样套一次 */
+        if ((DB.v || 6) < 25) {
+          DB.v = 25;
+          applyOfficerLock(DB);
         }
         save();
         setCloudTag('☁ 已下载', 'var(--brand-d)');
