@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v33 · 数据核对<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v34 · 云端诊断<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -5630,6 +5630,142 @@ function scheduleCloudPush() {
   cloudTimer = setTimeout(function () { cloudPush(false); }, 2500);
 }
 
+/* ===== 云端报错：把真实原因说清楚，别只说"上传失败" ===== */
+function cloudErrInfo(err) {
+  var code = '', msg = '';
+  if (err) {
+    code = err.code || err.statusCode || (err.error && err.error.Code) || '';
+    msg = err.message || (err.error && err.error.Message) || err.error || '';
+    if (typeof msg === 'object') msg = JSON.stringify(msg);
+  }
+  return { code: String(code || ''), msg: String(msg || '') };
+}
+function cloudFail(title, err) {
+  var d = cloudErrInfo(err);
+  var all = (d.code + ' ' + d.msg).toLowerCase();
+  var hint, icon = '⚠';
+  if (all.indexOf('access-control') >= 0 || all.indexOf('cors') >= 0 ||
+      all.indexOf('network') >= 0 || all.indexOf('failed to fetch') >= 0 ||
+      all.indexOf('load failed') >= 0) {
+    hint = '这一般是【浏览器跨域被拦】。腾讯云 COS 存储桶要单独允许网页跨域写：\n' +
+      '控制台 → 对象存储 → 存储桶列表 → 点你的桶名 → 左侧「安全管理」→「跨域访问 CORS 设置」→ 添加规则\n' +
+      '　来源 Origin：https://fndscheese.github.io\n' +
+      '　允许 Methods：勾 PUT、GET、POST、HEAD\n' +
+      '　Allow-Headers：*\n' +
+      '　Expose-Headers：ETag\n' +
+      '　超时 Max-age：600\n' +
+      '保存后立刻生效，不用重启，重新点上传即可。';
+  } else if (all.indexOf('accessdenied') >= 0 || all.indexOf('forbidden') >= 0 || all.indexOf('403') >= 0) {
+    hint = '这是【权限被拒】。挨个查：\n' +
+      '① 密钥对应账号有没有这个桶的读写权限（子账号要单独授权）\n' +
+      '② 桶名填错：只能填 mybucket，不能带 -1250000000 后缀\n' +
+      '③ 密钥是否被禁用或删除（腾讯云安全中心会因泄露自动禁用）';
+  } else if (all.indexOf('signature') >= 0 || all.indexOf('skew') >= 0 || all.indexOf('invalidaccesskey') >= 0) {
+    hint = '这是【签名/密钥不对】。挨个查：\n' +
+      '① SecretKey 是否完整复制（首尾不能有空格、不能少字符）\n' +
+      '② SecretId 和 SecretKey 是不是配错了对\n' +
+      '③ 电脑时间准不准（和标准时间差 15 分钟以上就会签名失败，去系统设置里同步时间）';
+  } else if (all.indexOf('nosuchbucket') >= 0 || all.indexOf('404') >= 0) {
+    hint = '这是【找不到存储桶】。\n' +
+      '① 桶名只填前缀，例如 mytown，不要带 -1250000000\n' +
+      '② 地域要跟桶所在的地域一致，例如 ap-guangzhou（不是「广州」两字，也不是 ap-guangzhou-1）';
+  } else if (all.indexOf('quota') >= 0 || all.indexOf('exceed') >= 0) {
+    hint = '这是【额度/大小限制】。检查存储桶是否欠费停服，或单次上传是否超限。';
+  } else {
+    hint = '常见原因：密钥不对、没开跨域、存储桶名或地域错、密钥被禁用。\n' +
+      '点上面的「诊断」按钮可以一步步测出卡在哪一环。';
+  }
+  openModal(
+    '<div class="mh"><h3>' + title + '</h3><button class="x" onclick="closeModal()">×</button></div>' +
+    '<div class="mb">' +
+      '<div style="background:#FFF3F2;border:1px solid #F5C6C2;border-radius:10px;padding:12px 14px;' +
+        'font-size:12.5px;color:#C0392B;line-height:1.9;word-break:break-all">' +
+        '<div><b>错误码：</b>' + (d.code || '（无，多为跨域被浏览器拦掉）') + '</div>' +
+        '<div><b>原始信息：</b>' + (d.msg || '（空）') + '</div>' +
+      '</div>' +
+      '<div class="dNote" style="margin-top:12px;white-space:pre-line;line-height:1.85">' + hint + '</div>' +
+    '</div>' +
+    '<div class="mf">' +
+      '<button class="btn ghost" id="btnCloudDiag2">诊断一下</button>' +
+      '<button class="btn" onclick="closeModal()">知道了</button>' +
+    '</div>'
+  );
+  var db = document.getElementById('btnCloudDiag2');
+  if (db) db.addEventListener('click', function () { closeModal(); cloudSelfTest(); });
+}
+
+/* ===== 云端诊断：一步步查出卡在哪 ===== */
+function cloudSelfTest() {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
+  loadCloudConf();
+  var c = cloudConf || {};
+  var lines = [];
+  var okAll = true;
+
+  var has = !!(c.bucket && c.region && c.secretId && c.secretKey);
+  lines.push({ ok: has, t: '配置读取',
+    d: has ? ('桶 ' + c.bucket + ' · 地域 ' + c.region) : '配置不完整，先点「配置云端」把四项都填上' });
+  if (!has) okAll = false;
+
+  if (c.bucket && /-\d{6,}$/.test(c.bucket)) {
+    lines.push({ ok: false, t: '桶名格式',
+      d: '桶名里带了 -125xxxxxxx 后缀，要改掉，只留前面的名字（如 mytown）' });
+    okAll = false;
+  } else if (c.bucket) {
+    lines.push({ ok: true, t: '桶名格式', d: '没有多余后缀，正常' });
+  }
+  if (c.region && c.region.indexOf('ap-') !== 0) {
+    lines.push({ ok: false, t: '地域格式', d: '地域应形如 ap-guangzhou / ap-beijing / ap-shanghai' });
+    okAll = false;
+  }
+
+  var inited = false;
+  try { inited = !!cloudInit(); } catch (e) { inited = false; }
+  lines.push({ ok: inited, t: 'SDK 初始化', d: inited ? '正常' : '初始化失败，多半是密钥格式不对' });
+  if (!inited) okAll = false;
+
+  if (!inited) { renderDiag(lines, '前面的没过去，先修上面的问题'); return; }
+
+  lines.push({ ok: true, t: '上传测试', d: '正在上传一个测试文件…' });
+  renderDiag(lines, '上传测试进行中…');
+
+  var testKey = '_selftest.txt';
+  cosClient.putObject({
+    Bucket: c.bucket, Region: c.region, Key: testKey,
+    Body: 'selftest ' + new Date().toISOString()
+  }, function (err) {
+    lines[lines.length - 1] = err
+      ? { ok: false, t: '上传测试', d: '失败：' + (cloudErrInfo(err).code || '') + ' ' + (cloudErrInfo(err).msg || '') }
+      : { ok: true, t: '上传测试', d: '成功！说明配置和跨域都没问题' };
+    renderDiag(lines, err ? '卡在最后一步，多半是跨域没配（见下方提示）' : '全部通过 ✓ 可以正常同步了');
+  });
+}
+
+function renderDiag(lines, tail) {
+  var html = '';
+  lines.forEach(function (l) {
+    html += '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #F2F6F7;' +
+      'font-size:12.5px;line-height:1.7">' +
+      '<span style="color:' + (l.ok ? '#1E9C89' : '#C0392B') + ';font-weight:700">' +
+      (l.ok ? '✓' : '✗') + '</span>' +
+      '<span style="width:86px;color:var(--ink2);flex:none">' + l.t + '</span>' +
+      '<span style="color:' + (l.ok ? 'var(--ink)' : '#C0392B') + '">' + l.d + '</span></div>';
+  });
+  var allOk = lines.every(function (l) { return l.ok; });
+  openModal(
+    '<div class="mh"><h3>云端诊断</h3><button class="x" onclick="closeModal()">×</button></div>' +
+    '<div class="mb">' + html +
+      '<div class="dNote" style="margin-top:12px;line-height:1.85">' + tail + '</div>' +
+      (allOk ? '' : '<div class="dNote" style="margin-top:8px;line-height:1.85;' +
+        'white-space:pre-line">跨域规则怎么加：控制台 → 对象存储 → 存储桶列表 → 点桶名 → ' +
+        '左侧「安全管理」→「跨域访问 CORS 设置」→ 添加规则：\n' +
+        '　来源 https://fndscheese.github.io\n　Methods 勾 PUT / GET / POST / HEAD\n' +
+        '　Allow-Headers 填 *\n　Expose-Headers 填 ETag\n　Max-age 600</div>') +
+    '</div>' +
+    '<div class="mf"><button class="btn" onclick="closeModal()">关闭</button></div>'
+  );
+}
+
 function cloudPush(force) {
   if (!cloudConf || !cloudConf.bucket) {
     if (force) toast('还没配置云端，先点「配置云端」');
@@ -5650,9 +5786,8 @@ function cloudPush(force) {
     cloudBusy = false;
     if (err) {
       console.log('cloudPush error', err);
-      var m = err.message || (err.error && err.error.Message) || '网络问题';
       setCloudTag('☁ 同步失败', 'var(--red)');
-      if (force) toast('上传失败：' + m + '\n（常见原因：密钥不对、没开跨域、存储桶名错）');
+      if (force) cloudFail('上传失败', err);
     } else {
       var t = new Date();
       var hh = ('0' + t.getHours()).slice(-2), mm = ('0' + t.getMinutes()).slice(-2);
@@ -5689,7 +5824,7 @@ function cloudPull() {
         toast('云端还没有数据。先在本机点「立即上传」传一次。');
       } else {
         setCloudTag('☁ 读取失败', 'var(--red)');
-        toast('下载失败：' + (err.message || '网络问题'));
+        cloudFail('下载失败', err);
       }
       return;
     }
@@ -5802,6 +5937,7 @@ function openCloud() {
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">' +
         '<button class="btn" id="btnCloudUp">立即上传</button>' +
         '<button class="btn ghost" id="btnCloudDown">从云端下载</button>' +
+        '<button class="btn ghost" id="btnCloudDiag">诊断</button>' +
       '</div>' +
       '<div class="dNote">' +
         '平时不用管——每次改数据会自动上传（约 2.5 秒后）。<br>' +
@@ -5852,6 +5988,9 @@ function bindCloudModal() {
   on('btnCloudUp', function () {
     if (typeof needUnlock === 'function' && !needUnlock()) return;
     cloudPush(true); });
+  on('btnCloudDiag', function () {
+    if (typeof needUnlock === 'function' && !needUnlock()) return;
+    cloudSelfTest(); });
   on('btnCloudDown', function () {
     if (typeof needUnlock === 'function' && !needUnlock()) return;
     cloudPull(); });
