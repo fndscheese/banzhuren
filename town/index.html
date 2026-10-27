@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v35 · 修桶名误报<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v36 · 每日加分上限<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -806,7 +806,7 @@ function gtDef(id) {
 }
 /* 兼容旧变量名（有些地方还在用 GROUP_N） */
 var GROUP_N = GROUP_MAX;
-var DAILY_MAX = 12;
+var DAILY_MAX = 15;
 var START_POINTS = 20;      /* 开镇礼 */
 
 /* 网格：12×12 格，每格 2.4 单位 */
@@ -845,16 +845,16 @@ function petNameOf(n) {
 var RULE_CATS = ['学习', '纪律', '卫生', '品德', '集体', '宿舍'];
 var RULES = [
   /* --- 学习 --- */
-  { id:'e1',  cat:'学习', name:'早读达标',     v:1,  scope:'self', grp:'class' },
-  { id:'e2',  cat:'学习', name:'早读领读',     v:2,  scope:'self', grp:'class' },
-  { id:'e3',  cat:'学习', name:'举手发言',     v:1,  scope:'self', grp:'class' },
-  { id:'e4',  cat:'学习', name:'受老师表扬',   v:2,  scope:'self', grp:'class' },
-  { id:'e5',  cat:'学习', name:'作业全交',     v:1,  scope:'self', grp:'class' },
-  { id:'e6',  cat:'学习', name:'作业优秀',     v:2,  scope:'self', grp:'class' },
-  { id:'e7',  cat:'学习', name:'主动问问题',   v:1,  scope:'self', grp:'class' },
-  { id:'e8',  cat:'学习', name:'单元测进步',   v:3,  scope:'self', grp:'class' },
-  { id:'e9',  cat:'学习', name:'单科前 10',    v:3,  scope:'self', grp:'class' },
-  { id:'e10', cat:'学习', name:'班干部日常',   v:1,  scope:'self', grp:'officer' },
+  { id:'e1',  cat:'学习', name:'早读达标',     v:1,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'e2',  cat:'学习', name:'早读领读',     v:2,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'e3',  cat:'学习', name:'举手发言',     v:1,  scope:'self', grp:'class', maxPerDay:3 },
+  { id:'e4',  cat:'学习', name:'受老师表扬',   v:2,  scope:'self', grp:'class', maxPerDay:2 },
+  { id:'e5',  cat:'学习', name:'作业全交',     v:1,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'e6',  cat:'学习', name:'作业优秀',     v:2,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'e7',  cat:'学习', name:'主动问问题',   v:1,  scope:'self', grp:'class', maxPerDay:2 },
+  { id:'e8',  cat:'学习', name:'单元测进步',   v:3,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'e9',  cat:'学习', name:'单科前 10',    v:3,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'e10', cat:'学习', name:'班干部日常',   v:1,  scope:'self', grp:'officer', maxPerDay:1 },
 
   /* --- 纪律（全部扣分） --- */
   { id:'d1',  cat:'纪律', name:'迟到',         v:-1,  scope:'self', grp:'class' },
@@ -871,46 +871,46 @@ var RULES = [
   { id:'d13', cat:'纪律', name:'体育训练无故不训练', v:-2, scope:'self', grp:'class' },
 
   /* --- 卫生（值日） --- */
-  { id:'w1', cat:'卫生', name:'值日认真',      v:1,  scope:'self', grp:'duty' },
-  { id:'w2', cat:'卫生', name:'主动捡垃圾',    v:1,  scope:'self', grp:'duty' },
-  { id:'w3', cat:'卫生', name:'卫生评优',      v:2,  scope:'group', grp:'duty' },
+  { id:'w1', cat:'卫生', name:'值日认真',      v:1,  scope:'self', grp:'duty', maxPerDay:1 },
+  { id:'w2', cat:'卫生', name:'主动捡垃圾',    v:1,  scope:'self', grp:'duty', maxPerDay:2 },
+  { id:'w3', cat:'卫生', name:'卫生评优',      v:2,  scope:'group', grp:'duty', maxPerDay:1 },
   { id:'w4', cat:'卫生', name:'卫生不合格',    v:-2, scope:'group', grp:'duty' },
   { id:'w5', cat:'卫生', name:'值日迟到',      v:-1, scope:'self', grp:'duty' },
   { id:'w6', cat:'卫生', name:'值日缺勤',      v:-2, scope:'self', grp:'duty' },
 
   /* --- 品德（班干部周评四条 + 校级活动与获奖） --- */
-  { id:'m1',  cat:'品德', name:'好人好事',      v:2,  scope:'self', grp:'class' },
-  { id:'m2',  cat:'品德', name:'帮同学讲题',    v:2,  scope:'self', grp:'class' },
-  { id:'m13', cat:'品德', name:'班长副班长·周', v:5,  scope:'self', grp:'officer' },
-  { id:'m3',  cat:'品德', name:'班委履职·周',   v:4,  scope:'self', grp:'officer' },
-  { id:'m11', cat:'品德', name:'课代表履职·周', v:3,  scope:'self', grp:'officer' },
-  { id:'m14', cat:'品德', name:'课堂小组长·周', v:2,  scope:'self', grp:'officer' },
-  { id:'m12', cat:'品德', name:'班干部失职·周', v:-1, scope:'self', grp:'officer' },
-  { id:'m4',  cat:'品德', name:'承担班级事务',  v:3,  scope:'self', grp:'class' },
-  { id:'m5',  cat:'品德', name:'校级活动预赛',  v:1,  scope:'self', grp:'class' },
-  { id:'m7',  cat:'品德', name:'校级活动表演',  v:3,  scope:'self', grp:'class' },
-  { id:'m8',  cat:'品德', name:'校级一等奖',    v:3,  scope:'self', grp:'class' },
-  { id:'m9',  cat:'品德', name:'校级二等奖',    v:2,  scope:'self', grp:'class' },
-  { id:'m10', cat:'品德', name:'校级三等奖',    v:1,  scope:'self', grp:'class' },
+  { id:'m1',  cat:'品德', name:'好人好事',      v:2,  scope:'self', grp:'class', maxPerDay:2 },
+  { id:'m2',  cat:'品德', name:'帮同学讲题',    v:2,  scope:'self', grp:'class', maxPerDay:2 },
+  { id:'m13', cat:'品德', name:'班长副班长·周', v:5,  scope:'self', grp:'officer', maxPerDay:1 },
+  { id:'m3',  cat:'品德', name:'班委履职·周',   v:4,  scope:'self', grp:'officer', maxPerDay:1 },
+  { id:'m11', cat:'品德', name:'课代表履职·周', v:3,  scope:'self', grp:'officer', maxPerDay:1 },
+  { id:'m14', cat:'品德', name:'课堂小组长·周', v:2,  scope:'self', grp:'officer', maxPerDay:1 },
+  { id:'m12', cat:'品德', name:'班干部失职·周', v:-1, scope:'self', grp:'officer', maxPerDay:1 },
+  { id:'m4',  cat:'品德', name:'承担班级事务',  v:3,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'m5',  cat:'品德', name:'校级活动预赛',  v:1,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'m7',  cat:'品德', name:'校级活动表演',  v:3,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'m8',  cat:'品德', name:'校级一等奖',    v:3,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'m9',  cat:'品德', name:'校级二等奖',    v:2,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'m10', cat:'品德', name:'校级三等奖',    v:1,  scope:'self', grp:'class', maxPerDay:1 },
 
   /* --- 集体 --- */
-  { id:'c1', cat:'集体', name:'班级流动红旗',  v:10, scope:'class', grp:'class' },
-  { id:'c2', cat:'集体', name:'集会受表扬',    v:1,  scope:'class', grp:'class' },
-  { id:'c3', cat:'集体', name:'班级文化评优',  v:3,  scope:'self', grp:'class' },
-  { id:'c4', cat:'集体', name:'集体活动',      v:2,  scope:'self', grp:'class' },
-  { id:'c5', cat:'集体', name:'小组排第 1',    v:3,  scope:'group', grp:'class' },
-  { id:'c6', cat:'集体', name:'小组排第 2',    v:2,  scope:'group', grp:'class' },
-  { id:'c7', cat:'集体', name:'小组排第 3',    v:1,  scope:'group', grp:'class' },
+  { id:'c1', cat:'集体', name:'班级流动红旗',  v:10, scope:'class', grp:'class', maxPerDay:1, big:true },
+  { id:'c2', cat:'集体', name:'集会受表扬',    v:1,  scope:'class', grp:'class', maxPerDay:1 },
+  { id:'c3', cat:'集体', name:'班级文化评优',  v:3,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'c4', cat:'集体', name:'集体活动',      v:2,  scope:'self', grp:'class', maxPerDay:1 },
+  { id:'c5', cat:'集体', name:'小组排第 1',    v:3,  scope:'group', grp:'class', maxPerDay:1 },
+  { id:'c6', cat:'集体', name:'小组排第 2',    v:2,  scope:'group', grp:'class', maxPerDay:1 },
+  { id:'c7', cat:'集体', name:'小组排第 3',    v:1,  scope:'group', grp:'class', maxPerDay:1 },
 
   /* --- 晚修（作用于晚修小组） --- */
   { id:'n2', cat:'纪律', name:'晚修违纪',      v:-1, scope:'group', grp:'night' },
 
   /* --- 宿舍（big=突破单日上限的特别奖励） --- */
   { id:'r7', cat:'宿舍', name:'宿舍卫生不达标', v:-1, scope:'group', grp:'dorm' },
-  { id:'r1', cat:'宿舍', name:'文明宿舍',      v:8,  scope:'group', grp:'dorm', big:true },
+  { id:'r1', cat:'宿舍', name:'文明宿舍',      v:8,  scope:'group', grp:'dorm', big:true, maxPerDay:1 },
   { id:'r3', cat:'宿舍', name:'宿舍纪律扣分',  v:-3, scope:'group', grp:'dorm' },
-  { id:'r4', cat:'宿舍', name:'连续两月文明宿舍', v:20, scope:'group', grp:'dorm', big:true },
-  { id:'r5', cat:'宿舍', name:'学期最佳宿舍',  v:30, scope:'group', grp:'dorm', big:true }
+  { id:'r4', cat:'宿舍', name:'连续两月文明宿舍', v:20, scope:'group', grp:'dorm', big:true, maxPerDay:1 },
+  { id:'r5', cat:'宿舍', name:'学期最佳宿舍',  v:30, scope:'group', grp:'dorm', big:true, maxPerDay:1 }
 ];
 function rulesByCat(cat) { return RULES.filter(function (r) { return r.cat === cat; }); }
 
@@ -1173,6 +1173,7 @@ function newDB() {
       points: START_POINTS, spent: 0, penalty: 0,
       size: MIN_SIZE,    /* 地块边长（格）：12 → 14 → 16 自动扩建 */
       todayAdd: 0, todayDate: '',
+      todayCount: {},    /* 今天各项目已记几次：{ 规则id: 次数 } */
       pet: null,         /* { type, name, exp, level, feedToday, feedDate } */
       pet2: null,
       items: []          /* 小镇上的建筑 */
@@ -1203,6 +1204,7 @@ function load() {
       if (!s.size) s.size = MIN_SIZE;
       if (s.todayAdd === undefined) s.todayAdd = 0;
       if (s.todayDate === undefined) s.todayDate = '';
+      if (!s.todayCount || typeof s.todayCount !== 'object') s.todayCount = {};
       if (s.pet === undefined) s.pet = null;
       if (s.pet2 === undefined) s.pet2 = null;
       /* 清掉已经不存在的建筑（旧版本 id） */
@@ -1326,8 +1328,9 @@ function resetScoresIn(d) {
     s.points = START_POINTS;
     s.spent = 0;
     s.penalty = 0;
-    s.todayAdd = 0;      /* 今日已加也归零，否则今天还卡在 12 分上限里 */
+    s.todayAdd = 0;      /* 今日已加也归零，否则今天还卡在单日上限里 */
     s.todayDate = '';
+    s.todayCount = {};   /* 各项目今天点了几次也清空 */
   });
   d.records = [];
 }
@@ -3969,6 +3972,7 @@ function renderScore() {
     '<div class="stats" style="margin-bottom:14px">' +
       '<div class="stat t"><b>' + DB.students.length + '</b><span>学生人数</span></div>' +
       '<div class="stat g"><b>' + DAILY_MAX + '</b><span>单人单日加分上限</span></div>' +
+      '<div class="stat"><b>3</b><span>举手发言每日上限（次）</span></div>' +
       '<div class="stat p"><b>' + cp + ' / ' + CLASS_GOAL + '</b><span>班级基金（换一节电影）</span></div>' +
       '<div class="stat"><b>5</b><span>小组类别（每类最多 ' + GROUP_MAX + ' 组）</span></div>' +
     '</div>';
@@ -4005,6 +4009,7 @@ function pickPaneHtml() {
       tag = '<i style="background:#7B8E99">个人</i>';
     }
     if (r.big) tag += '<i style="background:#C2483A">大额</i>';
+    if (r.maxPerDay) tag += '<i style="background:#5B7C93">' + r.maxPerDay + '次/日</i>';
 
     grid += '<div class="rule' + (neg ? ' neg' : '') + '" data-rid="' + r.id + '">' +
       '<b>' + r.name + '</b>' + tag +
@@ -4051,7 +4056,10 @@ function pickPaneHtml() {
   /* ---- 学生卡片 ---- */
   function stuCard(s) {
     var b = balOf(s);
-    return '<div class="stuPick' + (pickedStu[s.id] ? ' on' : '') + '" data-id="' + s.id + '">' +
+    var tAdd = (s.todayDate === todayKey()) ? (s.todayAdd || 0) : 0;
+    var tip = '今天已加 ' + tAdd + ' / ' + DAILY_MAX + ' 分' + (tAdd >= DAILY_MAX ? '（已满）' : '');
+    return '<div class="stuPick' + (pickedStu[s.id] ? ' on' : '') + '" data-id="' + s.id + '"' +
+      ' title="' + tip + '">' +
       '<b>' + s.name + '</b>' +
       '<span>' + (b < 0 ? '欠' + (-b) : b + ' 分') + '</span></div>';
   }
@@ -4271,14 +4279,25 @@ function applyRule(rid) {
   }
 
   var today = todayKey();
-  var changes = [], recs = 0, capped = 0, affected = 0;
+  var changes = [], recs = 0, capped = 0, affected = 0, overTimes = 0;
 
   targets.forEach(function (s) {
-    if (s.todayDate !== today) { s.todayDate = today; s.todayAdd = 0; }
+    if (s.todayDate !== today) {
+      /* 换了一天：今日累计和"各项目今天点了几次"一起清零 */
+      s.todayDate = today;
+      s.todayAdd = 0;
+      s.todayCount = {};
+    }
+    if (!s.todayCount) s.todayCount = {};
     if (rule.v > 0) {
+      /* 单项每日次数上限（如举手发言每天最多 3 次） */
+      if (rule.maxPerDay) {
+        var usedToday = s.todayCount[rule.id] || 0;
+        if (usedToday >= rule.maxPerDay) { overTimes++; return; }
+      }
       var add;
       if (rule.big) {
-        /* 特别奖励（如文明宿舍）：不受单日 12 分限制，但照常计入今日已加 */
+        /* 特别奖励（文明宿舍 / 流动红旗）：不受单日上限限制，但照常计入今日已加 */
         add = rule.v;
         s.points += add;
         s.todayAdd = (s.todayAdd || 0) + add;
@@ -4289,8 +4308,9 @@ function applyRule(rid) {
         s.points += add;
         s.todayAdd = (s.todayAdd || 0) + add;
       }
+      if (rule.maxPerDay) s.todayCount[rule.id] = (s.todayCount[rule.id] || 0) + 1;
       logRec(s.id, rule.name, add);
-      changes.push({ id: s.id, key: 'points', d: add, today: add, big: !!rule.big });
+      changes.push({ id: s.id, key: 'points', d: add, today: add, big: !!rule.big, rid: rule.id });
       affected++;
     } else {
       var sub = -rule.v;
@@ -4302,7 +4322,16 @@ function applyRule(rid) {
     recs++;
   });
 
-  if (!affected) { toast('这些同学今天已经加满 ' + DAILY_MAX + ' 分了'); return; }
+  if (!affected) {
+    if (overTimes && !capped) {
+      toast('「' + rule.name + '」今天已经记满 ' + rule.maxPerDay + ' 次了，明天再来');
+    } else if (capped && !overTimes) {
+      toast('这些同学今天已经加满 ' + DAILY_MAX + ' 分了');
+    } else {
+      toast('没记上：有人今天加满 ' + DAILY_MAX + ' 分，有人这一项已经记满次数');
+    }
+    return;
+  }
   save();
   undoBuf = { changes: changes, recs: recs };
   pickedStu = {};
@@ -4314,7 +4343,8 @@ function applyRule(rid) {
   var msg = '已记：' + rule.name + ' ' + (rule.v > 0 ? '+' : '') + rule.v +
     ' · ' + scopeTxt + ' ' + affected + ' 人';
   if (rule.big) msg += '（特别奖励，不受单日上限）';
-  if (capped) msg += '（' + capped + ' 人已到上限）';
+  if (capped) msg += '（' + capped + ' 人今日上限已满）';
+  if (overTimes) msg += '（' + overTimes + ' 人这一项今天已记满 ' + rule.maxPerDay + ' 次）';
   toast(msg);
 }
 
@@ -4327,6 +4357,10 @@ function undoLastScore() {
     if (c.key === 'points') {
       s.points -= c.d;
       s.todayAdd = Math.max(0, (s.todayAdd || 0) - (c.today || c.d));
+      /* 撤销了就把"这一项今天记过一次"退回去 */
+      if (c.rid && s.todayCount && s.todayCount[c.rid]) {
+        s.todayCount[c.rid] = Math.max(0, s.todayCount[c.rid] - 1);
+      }
     } else {
       s.penalty = Math.max(0, (s.penalty || 0) - c.d);
     }
