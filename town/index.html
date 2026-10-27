@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v36 · 每日加分上限<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v37 · 举手5次<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -847,7 +847,7 @@ var RULES = [
   /* --- 学习 --- */
   { id:'e1',  cat:'学习', name:'早读达标',     v:1,  scope:'self', grp:'class', maxPerDay:1 },
   { id:'e2',  cat:'学习', name:'早读领读',     v:2,  scope:'self', grp:'class', maxPerDay:1 },
-  { id:'e3',  cat:'学习', name:'举手发言',     v:1,  scope:'self', grp:'class', maxPerDay:3 },
+  { id:'e3',  cat:'学习', name:'举手发言',     v:1,  scope:'self', grp:'class', maxPerDay:5 },
   { id:'e4',  cat:'学习', name:'受老师表扬',   v:2,  scope:'self', grp:'class', maxPerDay:2 },
   { id:'e5',  cat:'学习', name:'作业全交',     v:1,  scope:'self', grp:'class', maxPerDay:1 },
   { id:'e6',  cat:'学习', name:'作业优秀',     v:2,  scope:'self', grp:'class', maxPerDay:1 },
@@ -3972,7 +3972,11 @@ function renderScore() {
     '<div class="stats" style="margin-bottom:14px">' +
       '<div class="stat t"><b>' + DB.students.length + '</b><span>学生人数</span></div>' +
       '<div class="stat g"><b>' + DAILY_MAX + '</b><span>单人单日加分上限</span></div>' +
-      '<div class="stat"><b>3</b><span>举手发言每日上限（次）</span></div>' +
+      '<div class="stat"><b>' + (function () {
+        var r3 = null;
+        RULES.forEach(function (r) { if (r.id === 'e3') r3 = r; });
+        return (r3 && r3.maxPerDay) ? r3.maxPerDay : 3;
+      })() + '</b><span>举手发言每日上限（次）</span></div>' +
       '<div class="stat p"><b>' + cp + ' / ' + CLASS_GOAL + '</b><span>班级基金（换一节电影）</span></div>' +
       '<div class="stat"><b>5</b><span>小组类别（每类最多 ' + GROUP_MAX + ' 组）</span></div>' +
     '</div>';
