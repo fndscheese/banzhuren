@@ -476,7 +476,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v34 · 云端诊断<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v35 · 修桶名误报<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -5658,7 +5658,7 @@ function cloudFail(title, err) {
   } else if (all.indexOf('accessdenied') >= 0 || all.indexOf('forbidden') >= 0 || all.indexOf('403') >= 0) {
     hint = '这是【权限被拒】。挨个查：\n' +
       '① 密钥对应账号有没有这个桶的读写权限（子账号要单独授权）\n' +
-      '② 桶名填错：只能填 mybucket，不能带 -1250000000 后缀\n' +
+      '② 桶名要写成「名字-APPID」，例如 mytown-1250000000（少了后缀就会报这个）\n' +
       '③ 密钥是否被禁用或删除（腾讯云安全中心会因泄露自动禁用）';
   } else if (all.indexOf('signature') >= 0 || all.indexOf('skew') >= 0 || all.indexOf('invalidaccesskey') >= 0) {
     hint = '这是【签名/密钥不对】。挨个查：\n' +
@@ -5667,8 +5667,8 @@ function cloudFail(title, err) {
       '③ 电脑时间准不准（和标准时间差 15 分钟以上就会签名失败，去系统设置里同步时间）';
   } else if (all.indexOf('nosuchbucket') >= 0 || all.indexOf('404') >= 0) {
     hint = '这是【找不到存储桶】。\n' +
-      '① 桶名只填前缀，例如 mytown，不要带 -1250000000\n' +
-      '② 地域要跟桶所在的地域一致，例如 ap-guangzhou（不是「广州」两字，也不是 ap-guangzhou-1）';
+      '① 桶名要写成「名字-APPID」，例如 mytown-1250000000；名字里不能有大写字母和下划线\n' +
+      '② 地域要跟桶所在地域一致，例如 ap-guangzhou（不是「广州」两字，也不要写成 ap-guangzhou-1）';
   } else if (all.indexOf('quota') >= 0 || all.indexOf('exceed') >= 0) {
     hint = '这是【额度/大小限制】。检查存储桶是否欠费停服，或单次上传是否超限。';
   } else {
@@ -5707,16 +5707,24 @@ function cloudSelfTest() {
     d: has ? ('桶 ' + c.bucket + ' · 地域 ' + c.region) : '配置不完整，先点「配置云端」把四项都填上' });
   if (!has) okAll = false;
 
-  if (c.bucket && /-\d{6,}$/.test(c.bucket)) {
-    lines.push({ ok: false, t: '桶名格式',
-      d: '桶名里带了 -125xxxxxxx 后缀，要改掉，只留前面的名字（如 mytown）' });
-    okAll = false;
-  } else if (c.bucket) {
-    lines.push({ ok: true, t: '桶名格式', d: '没有多余后缀，正常' });
+  if (c.bucket) {
+    if (/-[0-9]{6,}$/.test(c.bucket)) {
+      lines.push({ ok: true, t: '桶名格式', d: '带了 APPID 后缀，格式正确（SDK 要求这样写）' });
+    } else {
+      lines.push({ ok: false, t: '桶名格式',
+        d: '缺 APPID 后缀。腾讯云 SDK 要求写成「名字-APPID」，例如 mytown-1250000000；' +
+          'APPID 在控制台右上角「账号信息」里看' });
+      okAll = false;
+    }
   }
-  if (c.region && c.region.indexOf('ap-') !== 0) {
-    lines.push({ ok: false, t: '地域格式', d: '地域应形如 ap-guangzhou / ap-beijing / ap-shanghai' });
-    okAll = false;
+  if (c.region) {
+    if (/^[a-z]{2,}-[a-z]+$/.test(c.region)) {
+      lines.push({ ok: true, t: '地域格式', d: '格式正确（如 ap-guangzhou）' });
+    } else {
+      lines.push({ ok: false, t: '地域格式',
+        d: '地域要写英文代号，例如 ap-guangzhou / ap-beijing / ap-shanghai，不能写「广州」' });
+      okAll = false;
+    }
   }
 
   var inited = false;
