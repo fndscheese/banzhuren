@@ -398,6 +398,11 @@ button,input,select{font-family:inherit;}
   padding:7px 9px;border:1px solid #EDF3F2;
 }
 .sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:8px;}
+.sc-gsep{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:11.5px;
+  color:var(--brand-d);font-weight:700;padding:8px 2px 2px;margin-top:4px;
+  border-top:1px dashed var(--line);}
+.sc-gsep:first-child{border-top:0;margin-top:0;padding-top:0;}
+.sc-gsep i{font-style:normal;font-weight:400;color:var(--ink3);font-size:11px;}
 .sc-row .nm{flex:1;font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .sc-row .nm s{color:var(--red);text-decoration:none;font-size:10.5px;}
 .sc-row input{
@@ -476,7 +481,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v39 · 精简顶部<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v40 · 按组记分<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -3961,7 +3966,7 @@ document.querySelectorAll('.tbtn[data-sky]').forEach(function (b) {
    ===================================================================== */
 var scoreMode = 'pick';
 var manualGrpType = 'class';   /* 手动录分里"按小组"作用于哪一类 */
-var pickGroupBy = 'none';     /* 点选记分：按哪一类小组来看人（none=不分组） */
+var pickGroupBy = 'class';    /* 点选记分：按哪一类小组来看人（默认按课堂小组，方便挨组加分） */
 var pickedStu = {};
 var ruleCat = '学习';
 var undoBuf = null;
@@ -3988,6 +3993,20 @@ function renderScore() {
 }
 
 /* ---------- 点选模式 ---------- */
+/* 把学生按某一类小组排好：组号从小到大，组内保持名单原顺序
+   多组的人按他最小的那个组号排 */
+function studentsByGroup(type) {
+  var arr = (DB.students || []).slice();
+  if (!type) return arr;
+  arr.sort(function (a, b) {
+    var ga = Math.min.apply(null, stuGroups(a, type));
+    var gb = Math.min.apply(null, stuGroups(b, type));
+    if (ga !== gb) return ga - gb;
+    return a.id - b.id;
+  });
+  return arr;
+}
+
 function pickPaneHtml() {
   /* ---- 规则分类 + 规则卡 ---- */
   var catTabs = '<div class="cats">' + RULE_CATS.map(function (c) {
@@ -4064,7 +4083,8 @@ function pickPaneHtml() {
 
   var sg;
   if (pickGroupBy === 'none') {
-    sg = '<div class="stuGrid">' + DB.students.map(stuCard).join('') + '</div>';
+    /* 不分组时也按课堂小组排好，挨组加分不会跳来跳去 */
+    sg = '<div class="stuGrid">' + studentsByGroup('class').map(stuCard).join('') + '</div>';
   } else {
     var usedG2 = Math.max(groupUsedCount(pickGroupBy), 1);
     sg = '';
@@ -4115,8 +4135,17 @@ function manualPaneHtml() {
   h += '</div>';
 
   h += '<div class="sc-grid" id="scGrid">';
-  DB.students.forEach(function (s) {
+  /* 按小组排好，每组之间加一条小标题，方便一组成员连着填 */
+  var lastG = -1;
+  studentsByGroup(manualGrpType).forEach(function (s) {
     var b = balOf(s);
+    var g = Math.min.apply(null, stuGroups(s, manualGrpType));
+    if (g !== lastG) {
+      lastG = g;
+      var gcnt = membersOf(manualGrpType, g).length;
+      h += '<div class="sc-gsep">' + groupName(manualGrpType, g) +
+        '<i>' + gcnt + ' 人</i></div>';
+    }
     h += '<div class="sc-row" data-id="' + s.id + '">' +
       '<span class="nm">' + s.name + (b < 0 ? ' <s>欠' + (-b) + '</s>' : '') + '</span>' +
       '<input class="p" type="number" min="0" max="12" placeholder="＋">' +
