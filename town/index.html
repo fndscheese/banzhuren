@@ -481,7 +481,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v40 · 按组记分<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v41 · 换座位换组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -5104,10 +5104,33 @@ function renderGroups() {
    老师从 Excel / Word 里粘一段名单进来，一行一组，前面的数字就是第几组。
    姓名之间用中文逗号「，」、顿号「、」或分号隔开；姓名中间的空格会被忽略。
    ===================================================================== */
+/* 把一段文字切成姓名列表。
+   有逗号/顿号 → 按它们切；只有空格 → 全是 2~4 字的名字就当分隔符，否则当"名字中间的空格"去掉。
+   例："张三 李四 王五" → 3 个人；"刘 炜" → 刘炜；"祖力皮喀尔 阿不来提" → 一个人 */
+function splitNames(seg) {
+  seg = String(seg || '').trim();
+  if (!seg) return [];
+  if (/[，,、;；\/]/.test(seg)) {
+    return seg.split(/[，,、;；\/]+/).map(function (x) {
+      return x.replace(/\s+/g, '');
+    }).filter(Boolean);
+  }
+  var parts = seg.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    var one = seg.replace(/\s+/g, '');
+    return one ? [one] : [];
+  }
+  var nameLike = parts.every(function (x) { return /^[\u4e00-\u9fa5·]{2,4}$/.test(x); });
+  if (nameLike) return parts;
+  var merged = seg.replace(/\s+/g, '');
+  return merged ? [merged] : [];
+}
+
 function parseGroupText(txt) {
   var out = [], auto = 0;
   String(txt || '').split(/\r?\n/).forEach(function (ln) {
-    ln = ln.replace(/\u3000/g, ' ').trim();
+    /* Tab 和全角空格当"分隔符"（粘贴 Excel 多列、或"张三　李四"时），半角空格当"多余空格"去掉 */
+    ln = ln.replace(/[\t\u3000]+/g, '，').trim();
     if (!ln) return;
     var gi, rest = ln;
     var m = ln.match(/^第?\s*(\d{1,2})\s*组?\s*[.、:：\)）\-]?\s*/);
@@ -5115,9 +5138,7 @@ function parseGroupText(txt) {
     else { gi = auto; }
     if (gi < 0 || gi >= GROUP_MAX) return;
     auto = gi + 1;
-    /* 先去掉所有空格（"刘  炜" → "刘炜"），再按逗号/顿号/分号切 */
-    rest.replace(/\s+/g, '').split(/[，,、;；\/]+/).forEach(function (nm) {
-      nm = nm.trim();
+    splitNames(rest).forEach(function (nm) {
       if (nm) out.push({ gi: gi, name: nm });
     });
   });
@@ -5129,6 +5150,13 @@ function findStuByName(nm) {
   var i, s, hit = null, cnt = 0;
   for (i = 0; i < DB.students.length; i++) {
     if (DB.students[i].name === nm) return DB.students[i];
+  }
+  /* 去掉中点、空格再比一次：「祖力皮喀尔阿不来提」↔「祖力皮喀尔·阿不来提」 */
+  var key = String(nm || '').replace(/[·\s]/g, '');
+  if (key) {
+    for (i = 0; i < DB.students.length; i++) {
+      if (String(DB.students[i].name).replace(/[·\s]/g, '') === key) return DB.students[i];
+    }
   }
   for (i = 0; i < DB.students.length; i++) {
     s = DB.students[i];
@@ -5147,15 +5175,29 @@ function openGroupImport() {
   openModal(
     '<div class="mh"><h3>批量粘贴导入分组</h3><button class="x" onclick="closeModal()">×</button></div>' +
     '<div class="mb">' +
-      '<div class="dNote">一行一个小组，<b>前面的数字就是第几组</b>。姓名之间用中文逗号「，」或顿号「、」隔开。<br>' +
-        '例：<br>1谢桂梅，黄月梅，邓语芯<br>2陈欣楠，缪華葳，毛翔宇<br>' +
-        '不写数字也行，按 1、2、3… 顺序往下排。姓名中间的空格会自动去掉。' +
+      '<div class="dNote">一行一个小组，<b>前面的数字就是第几组</b>。姓名之间用逗号「，」「、」<b>或空格</b>隔开都行，' +
+        '从 Excel 复制两列直接粘也认。<br>' +
+        '例：<br>1谢桂梅，黄月梅，邓语芯<br>2陈欣楠 缪華葳 毛翔宇<br>' +
+        '不写数字也行，按 1、2、3… 顺序往下排。<br>' +
+        '<b>换座位</b>：只粘变动的那几行就行，选下面的「覆盖」模式。' +
       '</div>' +
-      '<div style="display:flex;gap:10px;align-items:center;margin:12px 0">' +
+      '<div style="display:flex;gap:10px;align-items:center;margin:12px 0;flex-wrap:wrap">' +
         '<span style="font-size:12.5px">导入到</span>' +
         '<select id="impType" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;' +
           'font-size:12.5px;font-family:inherit">' + typeSel + '</select>' +
         '<span style="font-size:11.5px;color:var(--ink3)">只改这一类的分组，其他四类不动</span>' +
+      '</div>' +
+      '<div style="background:#F3F9F7;border:1px solid #CDE9E1;border-radius:10px;padding:10px 12px;' +
+        'margin-bottom:12px;font-size:12.5px;line-height:1.9">' +
+        '<label style="display:flex;gap:7px;align-items:flex-start;cursor:pointer">' +
+          '<input type="radio" name="impMode" value="replace" checked style="margin-top:4px">' +
+          '<span><b>覆盖（换座位用）</b>：名单里出现的人，组别<b>直接换成</b>新名单的组；' +
+          '没提到的人保持原样。</span></label>' +
+        '<label style="display:flex;gap:7px;align-items:flex-start;cursor:pointer;margin-top:6px">' +
+          '<input type="radio" name="impMode" value="add" style="margin-top:4px">' +
+          '<span><b>追加（加挂多组）</b>：保留原来的组，再额外加进新组（一个人可在多个组）。</span></label>' +
+        '<div style="color:var(--brand-d);margin-top:8px;font-weight:600">' +
+          '不管选哪种，<b>学生积分、建筑、宠物都不受影响</b>，只动这一类的组别。</div>' +
       '</div>' +
       '<textarea id="impTxt" placeholder="1张三，李四，王五&#10;2赵六，钱七" ' +
         'style="width:100%;height:190px;border:1px solid var(--line);border-radius:10px;' +
@@ -5174,12 +5216,34 @@ function openGroupImport() {
       document.getElementById('impMsg').innerHTML = '<b style="color:#D9534F">没读到内容</b>，检查一下是不是一行一组';
       return;
     }
-    var ok = 0, bad = [], gi = 0, txt = '';
+    /* 导入方式：replace=覆盖（换座位），add=追加（加挂多组） */
+    var mode = 'replace';
+    var rb = document.querySelector('input[name="impMode"]:checked');
+    if (rb) mode = rb.value;
+
+    var map = {}, bad = [], txt = '';
     rows.forEach(function (r) {
       var s = findStuByName(r.name);
-      if (s) { addStuGroups(s, type, [r.gi]); ok++; }
-      else bad.push(r.name);
+      if (!s) { if (bad.indexOf(r.name) < 0) bad.push(r.name); return; }
+      if (!map[s.id]) map[s.id] = [];
+      if (map[s.id].indexOf(r.gi) < 0) map[s.id].push(r.gi);
     });
+
+    var ok = 0;
+    Object.keys(map).forEach(function (sid) {
+      var st = DB.students[parseInt(sid, 10)];
+      if (!st) return;
+      var gs = map[sid].slice().sort(function (a, b) { return a - b; });
+      if (mode === 'replace') {
+        /* 换座位：这个人直接改成新组，旧组别作废；积分一律不动 */
+        if (!st.groups) st.groups = {};
+        st.groups[type] = gs;
+      } else {
+        addStuGroups(st, type, gs);
+      }
+      ok++;
+    });
+
     if (!ok) {
       document.getElementById('impMsg').innerHTML =
         '<b style="color:#D9534F">一个都对不上</b>：' + bad.slice(0, 8).join('、');
@@ -5199,11 +5263,13 @@ function openGroupImport() {
     Object.keys(cntMap).forEach(function (k) {
       txt += '第' + (parseInt(k, 10) + 1) + '组' + cntMap[k] + '人 ';
     });
-    toast('已导入' + gtDef(type).name + ' ' + ok + ' 人');
+    toast('已' + (mode === 'replace' ? '换组' : '加组') + '：' + ok + ' 人（积分不变）');
     setTimeout(function () {
-      alert('导入完成：' + ok + ' 人' + (bad.length ? ('，有 ' + bad.length + ' 人对不上：' + bad.join('、')) : '') +
+      alert('导入完成（' + (mode === 'replace' ? '覆盖式' : '追加式') + '）：' + ok + ' 人' +
+        (bad.length ? ('\n\n有 ' + bad.length + ' 人对不上：' + bad.join('、')) : '') +
         '\n\n各组人数：\n' + txt.trim() +
-        '\n\n（只改了「' + gtDef(type).name + '」）');
+        '\n\n只改了「' + gtDef(type).name + '」的组别。' +
+        '\n学生积分、建筑、宠物一律没动。');
     }, 300);
   });
 }
