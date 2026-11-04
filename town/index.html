@@ -352,6 +352,23 @@ button,input,select{font-family:inherit;}
   .gRow .gnm:focus{outline:none;border-color:var(--brand);}
   .gRow .gcnt{width:52px;font-size:12px;color:var(--brand-d);font-weight:700;text-align:right;}
   .gRow .gmem{flex:1;font-size:11.5px;color:var(--ink3);line-height:1.6;}
+  .gRow .gmm{flex:none;white-space:nowrap;}
+  /* 管理成员弹窗 */
+  .gmSec{margin-top:16px;}
+  .gmSec h4{margin:0 0 9px;font-size:12.5px;font-weight:700;color:var(--ink2);}
+  .gmWrap{display:flex;flex-wrap:wrap;gap:7px;}
+  .gmChip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
+    background:#fff;border-radius:999px;padding:5px 11px;font-size:12.5px;cursor:pointer;
+    user-select:none;transition:border-color .15s,background .15s;line-height:1.5;}
+  .gmChip:hover{border-color:var(--brand);background:#F7FBFA;}
+  .gmChip i{font-style:normal;font-size:10.5px;color:var(--ink3);}
+  .gmChip.on{background:#EDF7F4;border-color:#9FD4C8;color:var(--brand-d);}
+  .gmChip.on:hover{background:#FFF3F2;border-color:#F0B7B1;}
+  .gmChip .gmx{color:#C2483A;font-weight:700;}
+  .gmEmpty{font-size:12px;color:var(--ink3);}
+  .gmKw{width:100%;margin-top:12px;border:1px solid var(--line);border-radius:9px;
+    padding:8px 12px;font-size:12.5px;font-family:inherit;background:#fff;}
+  .gmKw:focus{outline:none;border-color:var(--brand);}
 
 /* 放置提示条 */
 #placeBar{
@@ -481,7 +498,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v42 · 点哪组就是哪组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v43 · 分组里直接换人<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -5013,14 +5030,17 @@ function renderGroups() {
         'placeholder="给这一组取个名字">' +
       '<span class="gcnt">' + mem.length + ' 人</span>' +
       '<span class="gmem">' + (names || '<i style="color:#C6D2D6">还没有人</i>') + '</span>' +
+      '<button class="btn ghost sm gmm" data-gm="' + i + '">成员</button>' +
       '</div>';
   }
   rows += '</div>';
 
   var tip = '<div class="dNote" style="margin-top:14px">' +
     '组名留空就显示"第 N 组"。改完名字会自动保存。<br>' +
+    '<b>要加人减人：点每一组右边的「成员」</b>，弹窗里点一下名字就调进来，点 × 就移出去。' +
+    '换座位后也可以只调变动的那几个人。<br>' +
     '<b>要加组就点上面的「＋ 加一组」</b>，会多出一个空组（现在最多 ' + GROUP_MAX + ' 组）；' +
-    '空组放人：去「学生管理」点某个学生的「改」，或者用「批量粘贴导入」写「' + showN + '张三，李四」。<br>' +
+    '也可以「批量粘贴导入」写「' + showN + '张三，李四」。<br>' +
     '<b>五类小组是互相独立的</b>：同一个学生在晚修小组可能是第 3 组，在值日小组可能是第 7 组，互不影响。' +
     '</div>';
 
@@ -5042,6 +5062,13 @@ function renderGroups() {
       save();
       var idx = parseInt(inp.getAttribute('data-gn'), 10);
       toast('第 ' + (idx + 1) + ' 组改名为「' + groupName(groupTab, idx) + '」');
+    });
+  });
+
+  /* 管理成员：点某组右边的「成员」直接加减人 */
+  document.querySelectorAll('#groupsBody [data-gm]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      openGroupMembers(parseInt(b.getAttribute('data-gm'), 10));
     });
   });
 
@@ -5163,6 +5190,153 @@ function findStuByName(nm) {
     if (s.name.indexOf(nm) >= 0) { hit = s; cnt++; }
   }
   return (cnt === 1) ? hit : null;
+}
+
+/* =====================================================================
+   分组管理 → 直接改成员
+   ---------------------------------------------------------------------
+   点某一组右边的「成员」，弹窗里：
+     · 上面是本组的人，点 × 就移出
+     · 下面是全班其他同学（按现在的组排好），点一下就调进本组
+     · 顶部有搜索框，打一个字也能筛
+   只改 groups 字段，积分/建筑/宠物一律不动
+   ===================================================================== */
+var gmKw = '';       /* 弹窗里的搜索词，重绘后保留 */
+
+function gmNowText(s, type) {
+  var gs = stuGroups(s, type);
+  if (gs.length === 1) return '第 ' + (gs[0] + 1) + ' 组';
+  return '第 ' + gs.map(function (g) { return g + 1; }).join('、') + ' 组';
+}
+
+function openGroupMembers(idx) {
+  if (typeof needUnlock === 'function' && !needUnlock()) return;
+  var type = groupTab;
+  gmKw = '';
+
+  function baseLists() {
+    var mem = membersOf(type, idx);
+    var inIds = {};
+    mem.forEach(function (s) { inIds[s.id] = 1; });
+    var others = DB.students.filter(function (s) { return !inIds[s.id]; });
+    /* 按"现在第几组"排，同组内按名单原顺序 */
+    others.sort(function (a, b) {
+      var ga = stuGroup(a, type), gb = stuGroup(b, type);
+      if (ga !== gb) return ga - gb;
+      return a.id - b.id;
+    });
+    return { mem: mem, others: others };
+  }
+
+  function chipIn(s) {
+    var gs = stuGroups(s, type);
+    var extra = gs.length > 1
+      ? ' <i>' + gs.map(function (g) { return g + 1; }).join('·') + '</i>'
+      : '';
+    return '<span class="gmChip on" data-gmrm="' + s.id + '" title="点一下把 TA 移出本组">' +
+      s.name + extra + ' <b class="gmx">×</b></span>';
+  }
+  function chipOut(s) {
+    return '<span class="gmChip" data-gmadd="' + s.id + '" title="点一下把 TA 调进本组">' +
+      s.name + ' <i>' + gmNowText(s, type) + '</i></span>';
+  }
+
+  /* 只重画两块，搜索框不丢焦点 */
+  function paint() {
+    var L = baseLists();
+    var mem = L.mem, others = L.others;
+    if (gmKw) {
+      others = others.filter(function (x) { return x.name.indexOf(gmKw) >= 0; });
+    }
+    var wIn = document.getElementById('gmInWrap');
+    var wOut = document.getElementById('gmOutWrap');
+    var hIn = document.getElementById('gmInH');
+    var hOut = document.getElementById('gmOutH');
+    if (!wIn || !wOut) return;
+    wIn.innerHTML = mem.length ? mem.map(chipIn).join('')
+      : '<span class="gmEmpty">这一组还没有人，从下面点同学进来</span>';
+    wOut.innerHTML = others.length ? others.map(chipOut).join('')
+      : '<span class="gmEmpty">' + (gmKw ? '没找到叫「' + gmKw + '」的同学' : '全班都已经在这一组了') + '</span>';
+    if (hIn) hIn.textContent = '本组 ' + mem.length + ' 人（点 × 移出）';
+    if (hOut) hOut.textContent = '其他同学 ' + others.length + ' 人' +
+      (gmKw ? '（筛「' + gmKw + '」）' : '（点一下就调进本组）');
+    bindChips();
+  }
+
+  function doRemove(s) {
+    var cur = stuGroups(s, type);
+    if (cur.length <= 1 && idx === 0) {
+      toast('第 1 组是默认组，「' + s.name + '」只有这一组，移出就没组了。要换组，请打开目标组把人调过去');
+      return;
+    }
+    dropStuGroup(s, type, idx);
+    save();
+    renderGroups();
+    paint();
+    toast('已把「' + s.name + '」移出第 ' + (idx + 1) + ' 组');
+  }
+
+  function doAdd(s) {
+    var cur = stuGroups(s, type);
+    var was = gmNowText(s, type);
+    if (cur.length > 1) addStuGroups(s, type, [idx]);
+    else setStuGroup(s, type, idx);
+    save();
+    renderGroups();
+    paint();
+    toast('「' + s.name + '」从 ' + was + ' 调到第 ' + (idx + 1) + ' 组');
+  }
+
+  function bindChips() {
+    document.querySelectorAll('#mask [data-gmrm]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (typeof needUnlock === 'function' && !needUnlock()) return;
+        var s = DB.students[parseInt(b.getAttribute('data-gmrm'), 10)];
+        if (s) doRemove(s);
+      });
+    });
+    document.querySelectorAll('#mask [data-gmadd]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (typeof needUnlock === 'function' && !needUnlock()) return;
+        var s = DB.students[parseInt(b.getAttribute('data-gmadd'), 10)];
+        if (s) doAdd(s);
+      });
+    });
+  }
+
+  var L0 = baseLists();
+  var autoName = '第 ' + (idx + 1) + ' 组';
+  var gnm = groupName(type, idx);
+  var title = (gnm && gnm !== autoName) ? (autoName + ' · ' + gnm) : autoName;
+  openModal(
+    '<div class="mh"><h3>' + title + '</h3>' +
+    '<button class="x" onclick="closeModal()">×</button></div>' +
+    '<div class="mb">' +
+      '<div class="dNote">' +
+        '点下面的同学，就把 TA 调进这一组；点上面的 × 就移出。<b>只改组别，积分、建筑、宠物一律不动。</b><br>' +
+        '只有一组的人调走 = 换组；身兼多组的人调进来 = 多挂一组，原来的组保留。' +
+      '</div>' +
+      '<input id="gmKw" class="gmKw" placeholder="搜名字：打一个字也行，例如 张">' +
+      '<div class="gmSec"><h4 id="gmInH">本组 ' + L0.mem.length + ' 人（点 × 移出）</h4>' +
+        '<div class="gmWrap" id="gmInWrap"></div></div>' +
+      '<div class="gmSec"><h4 id="gmOutH">其他同学 ' + L0.others.length + ' 人（点一下就调进本组）</h4>' +
+        '<div class="gmWrap" id="gmOutWrap"></div></div>' +
+    '</div>' +
+    '<div class="mf">' +
+      '<span style="font-size:11.5px;color:var(--ink3);margin-right:auto">点一下即时保存，不用点确定</span>' +
+      '<button class="btn" onclick="closeModal()">完成</button>' +
+    '</div>'
+  );
+
+  paint();
+
+  var inp = document.getElementById('gmKw');
+  if (inp) {
+    inp.addEventListener('input', function () {
+      gmKw = inp.value.replace(/^\s+|\s+$/g, '');
+      paint();
+    });
+  }
 }
 
 function openGroupImport() {
