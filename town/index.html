@@ -481,7 +481,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v41 · 换座位换组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v42 · 点哪组就是哪组<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -5352,8 +5352,12 @@ function openStuGroups(sid) {
   openModal(
     '<div class="mh"><h3>' + s.name + ' 的分组</h3><button class="x" onclick="closeModal()">×</button></div>' +
     '<div class="mb">' +
-      '<div class="dNote">一个人在同一类小组里<b>可以同时属于多个组</b>（身兼多职就都点上）。<br>' +
-      '五类小组互相独立：班干、晚修、课堂、值日、宿舍各选各的，互不影响。点数字就是选中，再点一下取消。</div>' +
+      '<div class="dNote">点数字就是选中：<b>点哪一个，就只留哪一个</b>（换座位、调组就用这个）。<br>' +
+      '五类小组互相独立：班干、晚修、课堂、值日、宿舍各选各的，互不影响。<br>' +
+      '<label style="display:inline-flex;gap:6px;align-items:center;margin-top:6px;cursor:pointer;' +
+        'color:#C0392B;font-weight:600">' +
+        '<input type="checkbox" id="sgMulti"> 允许一人多组（身兼多职才勾，勾了之后点是"加组"不是"换组"）' +
+      '</label></div>' +
       rows +
     '</div>' +
     '<div class="mf"><button class="btn ghost" onclick="closeModal()">取消</button>' +
@@ -5363,7 +5367,21 @@ function openStuGroups(sid) {
   /* 点数字切换选中 */
   document.querySelectorAll('#mask .sgPick').forEach(function (b) {
     b.addEventListener('click', function () {
-      b.classList.toggle('on');
+      var multiEl = document.getElementById('sgMulti');
+      var multi = !!(multiEl && multiEl.checked);
+      var t0 = b.getAttribute('data-gt');
+      if (multi) {
+        b.classList.toggle('on');
+      } else if (b.classList.contains('on')) {
+        /* 单选模式：再点自己就取消（会兜底第 1 组） */
+        b.classList.remove('on');
+      } else {
+        /* 单选模式：先把同一类的其他按钮全灭掉，再点亮自己 */
+        document.querySelectorAll('#mask .sgPick[data-gt="' + t0 + '"]').forEach(function (x) {
+          x.classList.remove('on');
+        });
+        b.classList.add('on');
+      }
       var t = b.getAttribute('data-gt');
       var row = document.querySelector('#mask .sgRow[data-rowt="' + t + '"]');
       if (!row) return;
@@ -5379,6 +5397,11 @@ function openStuGroups(sid) {
 
   document.getElementById('btnStuGroupSave').addEventListener('click', function () {
     if (typeof needUnlock === 'function' && !needUnlock()) return;
+    /* 先记下原来各类是第几组，保存后好对比 */
+    var before = {};
+    GROUP_TYPES.forEach(function (t) {
+      before[t.id] = stuGroups(s, t.id).map(function (g) { return g + 1; }).join('、');
+    });
     var map = {};
     document.querySelectorAll('#mask .sgPick.on').forEach(function (b) {
       var t = b.getAttribute('data-gt');
@@ -5395,7 +5418,15 @@ function openStuGroups(sid) {
     closeModal();
     renderManage();
     renderOverview();
-    toast(s.name + ' 的分组已更新');
+    if (typeof renderGroups === 'function') renderGroups();
+    /* 说清楚到底改了什么，免得以为没生效 */
+    var changed = [];
+    GROUP_TYPES.forEach(function (t) {
+      var now = stuGroups(s, t.id).map(function (g) { return g + 1; }).join('、');
+      if (now !== before[t.id]) changed.push(t.name + ' → 第 ' + now + ' 组');
+    });
+    if (changed.length) toast(s.name + '：' + changed.join('；'));
+    else toast(s.name + ' 的分组没变化（刚才点的可能和原来一样）');
   });
 }
 
