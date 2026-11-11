@@ -25,6 +25,27 @@ button,input,select{font-family:inherit;}
 ::-webkit-scrollbar-thumb:hover{background:#B4C4CA;}
 
 #app{display:flex;height:100vh;}
+/* ============ 排行榜 ============ */
+.rk-bar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:12px 0 10px;}
+.rk-tabs{display:flex;background:#fff;border:1px solid var(--line);border-radius:10px;
+  overflow:hidden;box-shadow:var(--sh);}
+.rk-tabs button{border:0;background:transparent;padding:8px 15px;font-size:13px;
+  color:var(--ink2);cursor:pointer;border-right:1px solid var(--line);transition:.15s;}
+.rk-tabs button:last-child{border-right:0;}
+.rk-tabs button:hover{background:#F3F8F7;}
+.rk-tabs button.on{background:var(--brand-l);color:var(--brand-d);font-weight:700;}
+.rk-lb{font-size:12.5px;color:var(--ink2);}
+.rk-sel{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12.5px;
+  font-family:inherit;background:#fff;color:var(--ink);}
+.rk-note{font-size:12px;color:var(--ink3);line-height:1.85;margin:0 0 10px;}
+.rk-note b{color:var(--ink2);}
+.rk-wrap{background:#fff;border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;}
+.rk-wrap .tbl{width:100%;}
+.rk-wrap .tbl th{font-size:12.5px;}
+.rk-no{color:var(--ink3);font-weight:600;}
+.rk-mem{font-size:11.5px;color:var(--ink2);line-height:1.6;}
+.rk-foot{font-size:11.5px;color:var(--ink3);margin:10px 0 40px;line-height:1.8;}
+
 
 /* ============ 侧边栏 ============ */
 #side{
@@ -498,7 +519,7 @@ button,input,select{font-family:inherit;}
       <button class="lockBtn" id="btnLock">🔒 老师登录</button>
       <div class="lockTip" id="lockTip">浏览模式：只能看，不能记分</div>
     </div>
-    <div class="foot">v43 · 分组里直接换人<br><b>第一阶段</b> 2026.10 — 2027.8</div>
+    <div class="foot">v44 · 排行榜导出<br><b>第一阶段</b> 2026.10 — 2027.8</div>
   </aside>
 
   <!-- 主区 -->
@@ -587,14 +608,45 @@ button,input,select{font-family:inherit;}
     <section class="view" id="view-rank">
       <div class="topbar">
         <h2>排行榜</h2>
-        <div class="sub">按累计得分排序</div>
+        <div class="sub">个人 / 小组 · 周 / 累计，可导出打印</div>
+        <div class="sp"></div>
+        <button class="btn ghost sm" id="btnRankWord">导出 Word</button>
+        <button class="btn ghost sm" id="btnRankExcel">导出 Excel</button>
+        <button class="btn sm" id="btnRankPrint">打印 / 存 PDF</button>
       </div>
       <div class="scroll" style="padding-top:0">
-        <table class="tbl"><thead><tr>
-          <th style="width:60px">名次</th><th>学生</th>
-          <th style="width:90px">累计得分</th><th style="width:90px">可用积分</th>
-          <th style="width:90px">建筑数</th><th style="width:80px">楼层</th>
-        </tr></thead><tbody id="rankBody"></tbody></table>
+        <div class="rk-bar">
+          <div class="rk-tabs" id="rkTabs">
+            <button data-tab="self-week">个人 · 本周</button>
+            <button data-tab="self-all">个人 · 累计</button>
+            <button data-tab="group-week">小组 · 本周</button>
+            <button data-tab="group-all">小组 · 累计</button>
+          </div>
+        </div>
+        <div class="rk-bar" id="rkWeekBar" style="padding-top:0">
+          <button class="btn ghost sm" id="btnRankPrev">← 上一周</button>
+          <b id="rkWeekTxt" style="font-size:13px"></b>
+          <button class="btn ghost sm" id="btnRankNext">下一周 →</button>
+          <button class="btn ghost sm" id="btnRankNow">回到本周</button>
+          <select id="rkWeekPick" class="rk-sel"></select>
+        </div>
+        <div class="rk-bar" id="rkGroupBar" style="padding-top:0;display:none">
+          <span class="rk-lb">小组类别</span>
+          <select id="rkGType" class="rk-sel"></select>
+          <span class="rk-lb">排序</span>
+          <select id="rkSortBy" class="rk-sel">
+            <option value="sum">按总分</option>
+            <option value="avg">按人均</option>
+          </select>
+        </div>
+        <div class="rk-note" id="rkNote"></div>
+        <div class="rk-wrap">
+          <table class="tbl" id="rkTable">
+            <thead><tr id="rkHead"></tr></thead>
+            <tbody id="rankBody"></tbody>
+          </table>
+        </div>
+        <div class="rk-foot" id="rkFoot"></div>
       </div>
     </section>
 
@@ -4961,21 +5013,378 @@ function doClassAdjust() {
 /* =====================================================================
    排行榜
    ===================================================================== */
-function renderRank() {
-  var arr = DB.students.slice().sort(function (a, b) { return b.points - a.points; });
-  var html = '';
-  arr.forEach(function (s, i) {
-    var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-    var b = balOf(s);
-    html += '<tr><td style="font-weight:700;color:' + (i < 3 ? 'var(--gold)' : 'var(--ink3)') + '">' + medal + '</td>' +
-      '<td><b>' + s.name + '</b> <span style="color:var(--ink3);font-size:11.5px">' +
-        groupName('class', stuGroup(s, 'class')) + ' · ' + groupName('dorm', stuGroup(s, 'dorm')) + '</span></td>' +
-      '<td style="font-weight:700">' + s.points + '</td>' +
-      '<td' + (b < 0 ? ' style="color:var(--red);font-weight:700"' : '') + '>' + b + '</td>' +
-      '<td>' + s.items.length + '</td>' +
-      '<td>' + s.points + '</td></tr>';
+/* =====================================================================
+   排行榜：个人/小组 × 周/累计，可导出 Word / Excel / 打印 PDF
+   ---------------------------------------------------------------------
+   周积分来自积分流水（DB.records），按日期区间过滤后按学生累加；
+   累计积分直接用 s.points（流水有 800 条上限，不能靠流水累加）。
+   ===================================================================== */
+var rankTab = 'self-week';      /* self-week | self-all | group-week | group-all */
+var rankGType = 'class';        /* 小组榜看哪一类小组 */
+var rankWeekOff = 0;            /* 0=本周，-1=上一周 */
+var rankSortBy = 'sum';         /* 小组榜排序：sum=总分 avg=人均 */
+var rkBound = false;
+
+var WK_CN = ['日', '一', '二', '三', '四', '五', '六'];
+
+function rankIsWeek() { return /week$/.test(rankTab); }
+function rankIsSelf() { return /^self/.test(rankTab); }
+
+/* 以周四为一周第一天（跟课堂小组周记录表同一口径） */
+function weekRange(off) {
+  var d = new Date();
+  d.setHours(0, 0, 0, 0);
+  var back = (d.getDay() - 4 + 7) % 7;
+  var st = new Date(d.getTime() - back * 86400000 + (off || 0) * 7 * 86400000);
+  return { s: st, e: new Date(st.getTime() + 7 * 86400000) };
+}
+function fmtMD(d) { return (d.getMonth() + 1) + '/' + d.getDate(); }
+function fmtMDW(d) { return fmtMD(d) + '（周' + WK_CN[d.getDay()] + '）'; }
+function rangeText(wr) {
+  var last = new Date(wr.e.getTime() - 86400000);
+  return fmtMDW(wr.s) + ' ～ ' + fmtMDW(last);
+}
+
+/* 流水时间 "11/05 09:30"（没有年份，按最近年份推断） */
+function recDate(t) {
+  var m = /^(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?/.exec(String(t || '').trim());
+  if (!m) return null;
+  var now = new Date();
+  var y = now.getFullYear();
+  var d = new Date(y, parseInt(m[1], 10) - 1, parseInt(m[2], 10),
+                   m[3] ? parseInt(m[3], 10) : 12, m[4] ? parseInt(m[4], 10) : 0);
+  if (d.getTime() - now.getTime() > 86400000) {   /* 不可能有未来记录 → 必是去年 */
+    d = new Date(y - 1, parseInt(m[1], 10) - 1, parseInt(m[2], 10),
+                 m[3] ? parseInt(m[3], 10) : 12, m[4] ? parseInt(m[4], 10) : 0);
+  }
+  return d;
+}
+
+/* 区间内每个学生的积分合计 + 记录条数：{ sum:{id:分}, cnt:{id:次} }
+   （sid<0 的是全班/集体那条，不算到个人头上） */
+function sumInRange(a, b) {
+  var sum = {}, cnt = {};
+  (DB.records || []).forEach(function (r) {
+    if (r.sid === undefined || r.sid === null || r.sid < 0) return;
+    var d = recDate(r.t);
+    if (!d || d < a || d >= b) return;
+    sum[r.sid] = (sum[r.sid] || 0) + (r.v || 0);
+    cnt[r.sid] = (cnt[r.sid] || 0) + 1;
   });
+  return { sum: sum, cnt: cnt };
+}
+
+/* 有记录的周（下拉快速跳转） */
+function weekChoices() {
+  var cur = weekRange(0).s.getTime();
+  var seen = {}, list = [];
+  (DB.records || []).forEach(function (r) {
+    var d = recDate(r.t);
+    if (!d) return;
+    var back = (d.getDay() - 4 + 7) % 7;
+    var s0 = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back);
+    var k = s0.getTime();
+    if (seen[k]) return;
+    seen[k] = 1;
+    list.push(s0);
+  });
+  list.sort(function (x, y) { return y - x; });
+  return list.slice(0, 12).map(function (s0) {
+    return {
+      off: Math.round((s0.getTime() - cur) / (7 * 86400000)),
+      label: fmtMD(s0) + ' ~ ' + fmtMD(new Date(s0.getTime() + 6 * 86400000))
+    };
+  });
+}
+
+/* ---------- 取数 ---------- */
+function rankData() {
+  var isWeek = rankIsWeek(), isSelf = rankIsSelf();
+  var wr = weekRange(rankWeekOff);
+  var agg = isWeek ? sumInRange(wr.s, wr.e) : null;
+  var smap = isWeek ? agg.sum : null;
+  var cmap = isWeek ? agg.cnt : null;
+  var title, sub, head = [], rows = [], memCol = -1, day = 0;
+
+  var whenTxt = isWeek ? ('本周 ' + rangeText(wr)) : '累计（开学至今）';
+  if (isWeek) {
+    Object.keys(smap).forEach(function (k) { day += smap[k]; });
+  }
+
+  if (isSelf) {
+    title = '七（11）班　个人积分排行';
+    sub = whenTxt;
+    head = isWeek
+      ? ['名次', '姓名', '课堂小组', '本周得分', '本周记录']
+      : ['名次', '姓名', '课堂小组', '累计积分', '可用余额', '建筑'];
+    var arr = DB.students.map(function (st) {
+      return { st: st, sc: isWeek ? (smap[st.id] || 0) : (st.points || 0) };
+    });
+    arr.sort(function (x, y) {
+      if (y.sc !== x.sc) return y.sc - x.sc;
+      return x.st.name < y.st.name ? -1 : 1;
+    });
+    var rk = 0, prev = null;
+    arr.forEach(function (o, k) {
+      if (prev === null || o.sc !== prev) { rk = k + 1; prev = o.sc; }
+      if (isWeek) {
+        rows.push([rk, o.st.name, groupName('class', stuGroup(o.st, 'class')),
+                   o.sc, (cmap[o.st.id] || 0) + ' 次']);
+      } else {
+        rows.push([rk, o.st.name, groupName('class', stuGroup(o.st, 'class')),
+                   o.sc, balOf(o.st), o.st.items.length]);
+      }
+    });
+  } else {
+    title = '七（11）班　' + gtDef(rankGType).name + '积分排行';
+    sub = whenTxt + '　·　' + (rankSortBy === 'avg' ? '按人均排序' : '按总分排序');
+    head = ['名次', '小组', '人数',
+            isWeek ? '本周总分' : '累计总分', '人均', '组员'];
+    memCol = 5;
+    var total = Math.max(groupShowCount(rankGType), groupUsedCount(rankGType), 1);
+    var list = [];
+    for (var g = 0; g < total; g++) {
+      var mm = membersOf(rankGType, g);
+      if (!mm.length) continue;
+      var sum = 0;
+      mm.forEach(function (st) { sum += isWeek ? (smap[st.id] || 0) : (st.points || 0); });
+      list.push({
+        g: g, name: groupName(rankGType, g), n: mm.length, sum: sum,
+        avg: Math.round(sum / mm.length * 10) / 10,
+        mem: mm.map(function (st) { return st.name; }).join('、')
+      });
+    }
+    list.sort(function (x, y) {
+      var d = rankSortBy === 'avg' ? (y.avg - x.avg) : (y.sum - x.sum);
+      return d !== 0 ? d : (x.g - y.g);
+    });
+    var key = rankSortBy === 'avg' ? 'avg' : 'sum';
+    var grk = 0, gprev = null;
+    list.forEach(function (o, k) {
+      if (gprev === null || o[key] !== gprev) { grk = k + 1; gprev = o[key]; }
+      rows.push([grk, o.name, o.n, o.sum, o.avg, o.mem]);
+    });
+  }
+  return { title: title, sub: sub, head: head, rows: rows, isWeek: isWeek,
+           isSelf: isSelf, wr: wr, memCol: memCol, day: day };
+}
+
+/* ---------- 渲染 ---------- */
+function renderRank() {
+  bindRankEvents();
+  var d = rankData();
+
+  /* tab 高亮 */
+  Array.prototype.forEach.call(document.querySelectorAll('#rkTabs button'), function (b) {
+    b.classList.toggle('on', b.getAttribute('data-tab') === rankTab);
+  });
+  document.getElementById('rkWeekBar').style.display = d.isWeek ? 'flex' : 'none';
+  document.getElementById('rkGroupBar').style.display = d.isSelf ? 'none' : 'flex';
+
+  /* 周信息 */
+  if (d.isWeek) {
+    document.getElementById('rkWeekTxt').textContent = rangeText(d.wr);
+    var sel = document.getElementById('rkWeekPick');
+    var opts = weekChoices();
+    var has = false;
+    opts.forEach(function (o) { if (o.off === rankWeekOff) has = true; });
+    if (!has) opts.unshift({ off: rankWeekOff, label: '（这一周没有记录）' });
+    sel.innerHTML = opts.map(function (o) {
+      return '<option value="' + o.off + '"' + (o.off === rankWeekOff ? ' selected' : '') + '>' +
+        o.label + '</option>';
+    }).join('');
+    document.getElementById('btnRankNext').disabled = rankWeekOff >= 0;
+  }
+
+  /* 表头 + 表体 */
+  var colW = d.isSelf
+    ? (d.isWeek ? [66, 0, 140, 110, 100] : [66, 0, 140, 110, 110, 80])
+    : [66, 170, 70, 120, 90, 0];
+  document.getElementById('rkHead').innerHTML = d.head.map(function (h, hi) {
+    var w = colW[hi];
+    return '<th' + (w ? ' style="width:' + w + 'px"' : '') + '>' + h + '</th>';
+  }).join('');
+
+  var html = '';
+  if (!d.rows.length) {
+    html = '<tr><td colspan="' + d.head.length + '" class="rk-no" style="padding:24px;text-align:center">' +
+      '这一周还没有任何积分记录</td></tr>';
+  } else {
+    d.rows.forEach(function (r, ri) {
+      /* 按真实名次给奖牌，并列时两人都是金牌 */
+      var rkNo = r[0];
+      var medal = rkNo === 1 ? '🥇' : rkNo === 2 ? '🥈' : rkNo === 3 ? '🥉' : rkNo;
+      var cells = '';
+      r.forEach(function (c, ci) {
+        if (ci === 0) {
+          cells += '<td style="font-weight:700;color:' + (rkNo <= 3 ? 'var(--gold)' : 'var(--ink3)') +
+            ';text-align:center">' + medal + '</td>';
+        } else if (ci === 1) {
+          cells += '<td><b>' + c + '</b></td>';
+        } else if (ci === d.memCol) {
+          cells += '<td class="rk-mem">' + c + '</td>';
+        } else if (ci === 3 || ci === 4) {
+          var neg = (typeof c === 'number' && c < 0);
+          cells += '<td style="text-align:center;font-weight:700' + (neg ? ';color:var(--red)' : '') + '">' + c + '</td>';
+        } else {
+          cells += '<td style="text-align:center">' + c + '</td>';
+        }
+      });
+      html += '<tr>' + cells + '</tr>';
+    });
+  }
   document.getElementById('rankBody').innerHTML = html;
+
+  /* 说明 */
+  var note = '统计口径：' + (d.isWeek
+    ? ('按积分流水汇总 <b>' + rangeText(d.wr) + '</b> 内的加减分（一周从周四开始，跟课堂小组周记录表同一口径）。')
+    : '用每个学生<b>累计获得的积分</b>（不减已消费、不扣扣罚），含全部历史。') +
+    '<br>本周全班共产生 <b>' + d.day + '</b> 分。' +
+    (d.isSelf ? '' : '<br>小组分数 = 组内成员分数之和；各组人数不同，觉得不公平可以切「按人均」。');
+  document.getElementById('rkNote').innerHTML = note;
+
+  /* 页脚 */
+  var d0 = new Date();
+  document.getElementById('rkFoot').textContent =
+    '七（11）班班主任　·　生成于 ' + d0.getFullYear() + '-' +
+    ('0' + (d0.getMonth() + 1)).slice(-2) + '-' + ('0' + d0.getDate()).slice(-2) + ' ' +
+    ('0' + d0.getHours()).slice(-2) + ':' + ('0' + d0.getMinutes()).slice(-2);
+}
+
+/* ---------- 导出 ---------- */
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function rankFileBase() {
+  var d = rankData();
+  var nm = d.isSelf ? '个人积分排行' : (gtDef(rankGType).name + '积分排行');
+  var tail;
+  if (d.isWeek) {
+    var e1 = new Date(d.wr.e.getTime() - 86400000);
+    tail = '-' + pad2(d.wr.s.getMonth() + 1) + pad2(d.wr.s.getDate()) +
+           '至' + pad2(e1.getMonth() + 1) + pad2(e1.getDate());
+  } else {
+    tail = '-累计';
+  }
+  var n = new Date();
+  return '七11班' + nm + tail + '-' + n.getFullYear() + pad2(n.getMonth() + 1) + pad2(n.getDate());
+}
+
+function rankExportHtml(forWord) {
+  var d = rankData();
+  var pct = d.isSelf
+    ? (d.isWeek ? [8, 26, 20, 23, 23] : [8, 24, 18, 17, 17, 16])
+    : [8, 18, 10, 17, 14, 33];
+  var th = d.head.map(function (h, hi) {
+    return '<th style="width:' + (pct[hi] || 12) + '%">' + h + '</th>';
+  }).join('');
+  var tr = '';
+  if (!d.rows.length) {
+    tr = '<tr><td colspan="' + d.head.length + '" style="text-align:center;color:#888">' +
+      '这一周还没有任何积分记录</td></tr>';
+  } else {
+    d.rows.forEach(function (r) {
+      tr += '<tr>' + r.map(function (c, ci) {
+        var al = (ci === 1 || ci === d.memCol) ? 'left' : 'center';
+        var sm = (ci === d.memCol) ? ' style="font-size:9.5pt;color:#555"' : '';
+        return '<td style="text-align:' + al + ';border:1px solid #666;padding:5px 7px"' + sm + '>' + c + '</td>';
+      }).join('') + '</tr>';
+    });
+  }
+  var head = forWord
+    ? '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+      'xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'
+    : '<html>';
+  return head + '<head><meta charset="utf-8"><title>' + d.title + '</title>' +
+    '<style>' +
+    '@page{size:A4 portrait;margin:1.6cm 1.3cm;}' +
+    'body{font-family:"微软雅黑","Microsoft YaHei","宋体",sans-serif;font-size:11pt;color:#111;}' +
+    'h1{font-size:16pt;text-align:center;margin:0 0 6px;font-weight:700;}' +
+    '.sub{text-align:center;font-size:9.5pt;color:#666;margin:0 0 14px;}' +
+    'table{border-collapse:collapse;width:100%;}' +
+    'th{border:1px solid #666;padding:6px 7px;font-size:10pt;background:#E8F5F2;text-align:center;}' +
+    'td{font-size:10.5pt;}' +
+    '.ft{margin-top:12px;font-size:9pt;color:#777;text-align:right;}' +
+    '</style></head><body>' +
+    '<h1>' + d.title + '</h1>' +
+    '<div class="sub">' + d.sub + '</div>' +
+    '<table><thead><tr>' + th + '</tr></thead><tbody>' + tr + '</tbody></table>' +
+    '<div class="ft">七（11）班班主任　·　' + new Date().toLocaleDateString('zh-CN') + '</div>' +
+    '</body></html>';
+}
+
+function rankSave(content, filename, mime) {
+  var blob = new Blob(['\ufeff' + content], { type: mime + ';charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+
+function rankExportWord() {
+  rankSave(rankExportHtml(true), rankFileBase() + '.doc', 'application/msword');
+  toast('已导出 Word，双击就能用 WPS 打开、改完直接打印');
+}
+
+function rankExportExcel() {
+  rankSave(rankExportHtml(false), rankFileBase() + '.xls', 'application/vnd.ms-excel');
+  toast('已导出 Excel（.xls），WPS 表格直接打开');
+}
+
+function rankPrint() {
+  var w = window.open('', '_blank');
+  if (!w) { toast('浏览器拦了弹窗，请允许本站弹出窗口后再试'); return; }
+  w.document.write(rankExportHtml(false));
+  w.document.close();
+  w.focus();
+  setTimeout(function () { w.print(); }, 400);
+}
+
+/* ---------- 事件绑定（只绑一次） ---------- */
+function bindRankEvents() {
+  if (rkBound) return;
+  rkBound = true;
+
+  document.getElementById('rkTabs').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-tab]') : null;
+    if (!b) return;
+    rankTab = b.getAttribute('data-tab');
+    renderRank();
+  });
+
+  document.getElementById('btnRankPrev').addEventListener('click', function () {
+    rankWeekOff--; renderRank();
+  });
+  document.getElementById('btnRankNext').addEventListener('click', function () {
+    if (rankWeekOff >= 0) return;
+    rankWeekOff++; renderRank();
+  });
+  document.getElementById('btnRankNow').addEventListener('click', function () {
+    rankWeekOff = 0; renderRank();
+  });
+  document.getElementById('rkWeekPick').addEventListener('change', function () {
+    rankWeekOff = parseInt(this.value, 10) || 0;
+    renderRank();
+  });
+  document.getElementById('rkGType').addEventListener('change', function () {
+    rankGType = this.value;
+    renderRank();
+  });
+  document.getElementById('rkSortBy').addEventListener('change', function () {
+    rankSortBy = this.value;
+    renderRank();
+  });
+
+  document.getElementById('btnRankWord').addEventListener('click', rankExportWord);
+  document.getElementById('btnRankExcel').addEventListener('click', rankExportExcel);
+  document.getElementById('btnRankPrint').addEventListener('click', rankPrint);
+
+  /* 小组类别下拉 */
+  var gsel = document.getElementById('rkGType');
+  gsel.innerHTML = GROUP_TYPES.map(function (t) {
+    return '<option value="' + t.id + '"' + (t.id === rankGType ? ' selected' : '') + '>' +
+      t.icon + ' ' + t.name + '</option>';
+  }).join('');
 }
 
 /* =====================================================================
