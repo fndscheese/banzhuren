@@ -1522,7 +1522,7 @@ function totalSpent(s) {
 /* 记录一条流水 */
 function logRec(sid, label, v) {
   DB.records.unshift({ t: nowStr(), sid: sid, name: DB.students[sid].name, label: label, v: v });
-  if (DB.records.length > 800) DB.records.length = 800;
+  if (DB.records.length > 5000) DB.records.length = 5000;   /* 周排行榜要按周回溯，800 条只够存两三周 */
 }
 
 /* =====================================================================
